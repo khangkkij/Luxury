@@ -1,0 +1,6 @@
+@Luxury_HostAddress = http://localhost:5131
+
+GET {{Luxury_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
