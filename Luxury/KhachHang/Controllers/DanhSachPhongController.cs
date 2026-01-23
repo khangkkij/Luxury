@@ -35,20 +35,8 @@ namespace KhachSanLuxury.KhachHang.Controllers
                         )
                         .Select(fs => fs.PhanTramGiam)
                         .FirstOrDefault(),
-                    SoPhongCon = x.Phongs.Count(p => p.TrangThai==0),
+                    SoPhongCon = x.Phongs.Count(p => p.TrangThai == 0),
                     AnhDaiDien = x.Hinhanhs.Select(h => h.DuongDan).FirstOrDefault()
-                }).AsEnumerable().Select(x => new
-                {
-                    x.MaBienThePhong,
-                    x.TenLoai,
-                    x.TenBienThe,
-                    x.SoNguoiToiDa,
-                    x.DienTich,
-                    Gia = x.PhanTramGiam != null ? x.GiaGoc - (x.GiaGoc * x.PhanTramGiam / 100): x.GiaGoc,
-                    x.GiaGoc,
-                    x.PhanTramGiam,
-                    x.SoPhongCon,
-                    x.AnhDaiDien
                 });
             return Ok(ds);
         }

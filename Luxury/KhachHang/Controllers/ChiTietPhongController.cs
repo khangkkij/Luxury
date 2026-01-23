@@ -89,7 +89,7 @@ namespace KhachSanLuxury.KhachHang.Controllers
                     },
 
                     BienTheKhac = _context.LoaiphongBienthes
-                        .Where(bt => bt.MaLp == x.MaLp && bt.MaBienThePhong != x.MaBienThePhong)
+                        .Where(bt => bt.MaLp == x.MaLp)
                         .Select(bt => new
                         {
                             bt.MaBienThePhong,
@@ -100,6 +100,18 @@ namespace KhachSanLuxury.KhachHang.Controllers
                             Gia = bt.Thietlapgia
                                 .Where(g => g.MacDinh == true)
                                 .Select(g => g.Gia)
+                                .FirstOrDefault(),
+                            SoPhongCon = _context.Phongs.Count(p =>
+                                p.MaBienThePhong == bt.MaBienThePhong &&
+                                p.TrangThai == 0
+                            ),
+                            PhanTramGiam = bt.ChitietFlashsales
+                                .Where(fs =>
+                                    fs.Flashsale.TrangThai == true &&
+                                    fs.Flashsale.NgayBatDau <= DateTime.Now &&
+                                    fs.Flashsale.NgayKetThuc >= DateTime.Now
+                                )
+                                .Select(fs => fs.PhanTramGiam)
                                 .FirstOrDefault()
                         })
                         .ToList()
