@@ -112,7 +112,9 @@ namespace KhachSanLuxury.KhachHang.Controllers
                                     fs.Flashsale.NgayKetThuc >= DateTime.Now
                                 )
                                 .Select(fs => fs.PhanTramGiam)
-                                .FirstOrDefault()
+                                .FirstOrDefault(),
+                            AnhDaiDien= bt.Hinhanhs.Where(h=>h.MaBienThePhong==bt.MaBienThePhong).Select(h => h.DuongDan).FirstOrDefault(),
+                            DanhSachAnh = bt.Hinhanhs.Where(h => h.MaBienThePhong == bt.MaBienThePhong).Select(h => h.DuongDan).ToList()
                         })
                         .ToList()
                 })
