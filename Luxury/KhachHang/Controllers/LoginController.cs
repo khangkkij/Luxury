@@ -1,11 +1,14 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Luxury.KhachHang.ViewModel;
 using Luxury.Models;
-using Luxury.KhachHang.ViewModel;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Text;
 using System.Security.Cryptography; // Cần cái này để tạo Refresh Token ngẫu nhiên
+using System.Text;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Facebook;
+using Microsoft.AspNetCore.Authentication.Cookies;
 
 namespace Luxury.KhachHang.Controllers
 {
@@ -51,9 +54,7 @@ namespace Luxury.KhachHang.Controllers
             return Ok(new { message = "Đăng nhập thành công", data = new { user.HoVaTen, user.Email } });
         }
 
-        // ---------------- CÁC HÀM PHỤ TRỢ ----------------
-
-        // 1. Hàm lưu Token vào bảng Refeshtoken của bạn
+        // 1. Hàm lưu Token 
         private void SaveRefreshTokenToDb(int userId, string token)
         {
             var rfToken = new Refeshtoken
@@ -79,7 +80,7 @@ namespace Luxury.KhachHang.Controllers
             }
         }
 
-        // 3. Hàm tạo JWT (Access Token)
+        // 3. Hàm tạo JWT 
         private string GenerateJwtToken(dynamic user)
         {
             var jwtSettings = _configuration.GetSection("Jwt");
@@ -118,10 +119,9 @@ namespace Luxury.KhachHang.Controllers
             };
             Response.Cookies.Append(name, value, cookieOptions);
         }
-        [HttpPost("register")] // Link: /api/Login/register
+        [HttpPost("register")] 
         public IActionResult Register([FromBody] RegisterRequest model)
         {
-            // 1. Check lại Valid (dù [ApiController] đã tự check nhưng code thêm cho chắc)
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
@@ -134,7 +134,7 @@ namespace Luxury.KhachHang.Controllers
                 return BadRequest(new { message = "Email này đã được sử dụng!" });
             }
 
-            // 3. Kiểm tra CCCD hoặc SĐT đã tồn tại chưa (Tùy chọn, nên làm để tránh trùng)
+            // 3. Kiểm tra CCCD hoặc SĐT đã tồn tại chưa
             if (_context.Khachhangs.Any(u => u.Cccd == model.Cccd))
             {
                 return BadRequest(new { message = "Số CCCD này đã được đăng ký!" });
@@ -167,15 +167,13 @@ namespace Luxury.KhachHang.Controllers
                 return StatusCode(500, new { message = "Lỗi server: " + ex.Message });
             }
         }
-        // [POST] api/Login/logout
         [HttpPost("logout")]
         public IActionResult Logout()
         {
             // 1. Lấy Refresh Token từ Cookie hiện tại (để xóa trong DB nếu cần)
             var refreshToken = Request.Cookies["RefreshToken"];
 
-            // 2. Xóa Token trong Database (Tuỳ chọn: Để bảo mật tuyệt đối)
-            // Nếu bạn muốn kỹ tính: Tìm token này trong bảng Refeshtoken và xóa nó đi
+            // 2. Xóa Token trong Database (Tuỳ chọn: Để bảo mật tuyệt đối)11
             if (!string.IsNullOrEmpty(refreshToken))
             {
                 var tokenInDb = _context.Refeshtokens.FirstOrDefault(x => x.Token == refreshToken);
@@ -187,11 +185,73 @@ namespace Luxury.KhachHang.Controllers
             }
 
             // 3. Xóa Cookie ở trình duyệt (QUAN TRỌNG NHẤT)
-            // Lệnh này sẽ gửi tín hiệu bảo trình duyệt: "Hãy quên 2 cái cookie này đi"
             Response.Cookies.Delete("AuthToken");
             Response.Cookies.Delete("RefreshToken");
 
             return Ok(new { message = "Đăng xuất thành công" });
+        }
+        [HttpGet("facebook-login")]
+        public IActionResult FacebookLogin()
+        {
+            // Yêu cầu Facebook xác thực
+            var properties = new AuthenticationProperties
+            {
+                RedirectUri = Url.Action("FacebookResponse")
+            };
+            return Challenge(properties, FacebookDefaults.AuthenticationScheme);
+        }
+
+        [HttpGet("facebook-response")]
+        public async Task<IActionResult> FacebookResponse()
+        {
+            // 1. Lấy dữ liệu từ Facebook
+            var result = await HttpContext.AuthenticateAsync(FacebookDefaults.AuthenticationScheme);
+            if (!result.Succeeded) return BadRequest("Lỗi xác thực Facebook");
+
+            var claims = result.Principal.Identities.FirstOrDefault()?.Claims;
+
+            // 2. Lấy ID Facebook 
+            var fbId = claims?.FirstOrDefault(x => x.Type == ClaimTypes.NameIdentifier)?.Value;
+
+            // 3. Lấy Email - NẾU TRỐNG THÌ DÙNG ID ĐỂ TẠO EMAIL GIẢ
+            var email = claims?.FirstOrDefault(x => x.Type == ClaimTypes.Email)?.Value;
+            if (string.IsNullOrEmpty(email))
+            {
+                // Tạo email dạng: 901331519065056@facebook.com
+                email = $"{fbId}@facebook.com";
+            }
+
+            var name = claims?.FirstOrDefault(x => x.Type == ClaimTypes.Name)?.Value;
+
+            // 4. Kiểm tra hoặc Tạo mới khách hàng
+            var user = _context.Khachhangs.FirstOrDefault(u => u.Email == email);
+            if (user == null)
+            {
+                user = new Khachhang
+                {
+                    Email = email,
+                    HoVaTen = name,
+                    MatKhau = "FB_" + fbId,
+                    NgayTao = DateTime.UtcNow,
+                    TrangThai = true,
+                    HinhAnh = "default-user.png"
+                };
+                _context.Khachhangs.Add(user);
+                _context.SaveChanges();
+            }
+
+            // 5. Tạo Token và Set Cookie (Giữ các hàm cũ của bạn)
+            var accessToken = GenerateJwtToken(user);
+            var refreshToken = GenerateRefreshTokenString();
+            SaveRefreshTokenToDb(user.MaKh, refreshToken);
+
+            SetCookie("AuthToken", accessToken, 30);
+            SetCookie("RefreshToken", refreshToken, 7 * 24 * 60);
+
+            // 6. Redirect về Vue kèm thông tin để Vue lưu vào LocalStorage
+            var encodedName = Uri.EscapeDataString(user.HoVaTen);
+            var encodedEmail = Uri.EscapeDataString(email);
+            return Redirect($"http://localhost:5173/?login_success=true&name={encodedName}&email={encodedEmail}");
         }
     }
 }

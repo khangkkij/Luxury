@@ -1,4 +1,5 @@
 ﻿using Luxury.Models;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -32,7 +33,9 @@ builder.Services.AddCors(options =>
 builder.Services.AddAuthentication(options => {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultSignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
 })
+.AddCookie()
 .AddJwtBearer(options => {
     options.TokenValidationParameters = new TokenValidationParameters
     {
@@ -44,6 +47,19 @@ builder.Services.AddAuthentication(options => {
         ValidAudience = builder.Configuration["Jwt:Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
     };
+})
+.AddFacebook(options => {
+    options.AppId = "1419032062964737";
+    options.AppSecret = "6b815c2b1bc5a6590a0d5e6ac1f095b0";
+
+    // Yêu cầu lấy thêm quyền Email
+    options.Scope.Add("email");
+
+    // Ép Facebook trả về các trường dữ liệu cụ thể
+    options.Fields.Add("name");
+    options.Fields.Add("email");
+
+    options.SaveTokens = true;
 });
 
 // --- Cấu hình Authorization (Phân quyền) ---
