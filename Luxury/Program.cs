@@ -82,13 +82,13 @@ if (app.Environment.IsDevelopment())
 
 app.UseStaticFiles(); // cho wwwroot (nếu có)
 
-app.UseStaticFiles(new StaticFileOptions
-{
-    FileProvider = new PhysicalFileProvider(
-        Path.Combine(builder.Environment.ContentRootPath, "Images")
-    ),
-    RequestPath = "/images"
-});
+//app.UseStaticFiles(new StaticFileOptions
+//{
+//    FileProvider = new PhysicalFileProvider(
+//        Path.Combine(builder.Environment.ContentRootPath, "Images")
+//    ),
+//    RequestPath = "/images"
+//});
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
