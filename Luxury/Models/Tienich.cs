@@ -15,5 +15,7 @@ public partial class Tienich
 
     public bool? TrangThai { get; set; }
 
-    public virtual ICollection<LoaiphongBienthe> MaBienThePhongs { get; set; } = new List<LoaiphongBienthe>();
+    //public virtual ICollection<LoaiphongBienthe> MaBienThePhongs { get; set; } = new List<LoaiphongBienthe>();
+    public ICollection<TienichLoaiphong> TienichLoaiphongs { get; set; }
+
 }

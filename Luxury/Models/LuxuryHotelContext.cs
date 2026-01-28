@@ -55,7 +55,7 @@ public partial class LuxuryHotelContext : DbContext
 
     public virtual DbSet<Voucher> Vouchers { get; set; }
 
-
+    public DbSet<TienichLoaiphong> TienichLoaiphongs { get; set; }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<ChitietFlashsale>(entity =>
@@ -77,6 +77,23 @@ public partial class LuxuryHotelContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__CHITIET_F__MaBie__6EF57B66");
         });
+
+        modelBuilder.Entity<TienichLoaiphong>(entity =>
+        {
+            entity.HasKey(e => new { e.MaTi, e.MaBienThePhong });
+
+            entity.ToTable("TIENICH_LOAIPHONG");
+
+            entity.HasOne(d => d.Tienich)
+                  .WithMany(p => p.TienichLoaiphongs)
+                  .HasForeignKey(d => d.MaTi);
+
+            entity.HasOne(d => d.LoaiphongBienthe)
+                  .WithMany(p => p.TienichLoaiphongs)
+                  .HasForeignKey(d => d.MaBienThePhong);
+        });
+
+
 
         modelBuilder.Entity<Chitietdatphong>(entity =>
         {
@@ -503,24 +520,6 @@ public partial class LuxuryHotelContext : DbContext
                 .HasMaxLength(255)
                 .HasColumnName("tenTienIch");
             entity.Property(e => e.TrangThai).HasColumnName("trangThai");
-
-            entity.HasMany(d => d.MaBienThePhongs).WithMany(p => p.MaTis)
-                .UsingEntity<Dictionary<string, object>>(
-                    "TienichLoaiphong",
-                    r => r.HasOne<LoaiphongBienthe>().WithMany()
-                        .HasForeignKey("MaBienThePhong")
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK__TIENICH_L__MaBie__6B24EA82"),
-                    l => l.HasOne<Tienich>().WithMany()
-                        .HasForeignKey("MaTi")
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK__TIENICH_LO__maTI__6A30C649"),
-                    j =>
-                    {
-                        j.HasKey("MaTi", "MaBienThePhong").HasName("PK__TIENICH___4B9ECE22ECC134BF");
-                        j.ToTable("TIENICH_LOAIPHONG");
-                        j.IndexerProperty<int>("MaTi").HasColumnName("maTI");
-                    });
         });
 
         modelBuilder.Entity<Voucher>(entity =>

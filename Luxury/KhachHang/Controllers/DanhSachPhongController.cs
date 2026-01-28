@@ -35,7 +35,7 @@ namespace KhachSanLuxury.KhachHang.Controllers
                         )
                         .Select(fs => fs.PhanTramGiam)
                         .FirstOrDefault(),
-                    SoPhongCon = x.Phongs.Count(p => p.TrangThai == 0),
+                    SoPhongCon = x.Phongs.Count(p => p.TrangThai == 1),
                     AnhDaiDien = x.Hinhanhs.Select(h => h.DuongDan).FirstOrDefault()
                 });
             return Ok(ds);
