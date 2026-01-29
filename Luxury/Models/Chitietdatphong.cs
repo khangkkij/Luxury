@@ -17,6 +17,10 @@ public partial class Chitietdatphong
 
     public DateTime? NgayTra { get; set; }
 
+    public int? SoNguoiLon { get; set; }
+
+    public int? SoTreEm { get; set; }
+
     public bool? TrangThai { get; set; }
 
     public virtual Datphong? MaDatPhongNavigation { get; set; }

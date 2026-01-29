@@ -15,11 +15,17 @@ public partial class LoaiphongBienthe
 
     public string? HuongNhin { get; set; }
 
-    public int? SoNguoiToiDa { get; set; }
+    public int? SoNguoiLon { get; set; }
+
+    public int? SoTreEm { get; set; }
 
     public decimal? DienTich { get; set; }
 
+    public int? TrangThai { get; set; }
+
     public virtual ICollection<ChitietFlashsale> ChitietFlashsales { get; set; } = new List<ChitietFlashsale>();
+
+    public virtual ICollection<Datphong> Datphongs { get; set; } = new List<Datphong>();
 
     public virtual ICollection<Hinhanh> Hinhanhs { get; set; } = new List<Hinhanh>();
 
@@ -29,7 +35,5 @@ public partial class LoaiphongBienthe
 
     public virtual ICollection<Thietlapgium> Thietlapgia { get; set; } = new List<Thietlapgium>();
 
-    //public virtual ICollection<Tienich> MaTis { get; set; } = new List<Tienich>();
-    public ICollection<TienichLoaiphong> TienichLoaiphongs { get; set; }
-
+    public virtual ICollection<Tienich> MaTis { get; set; } = new List<Tienich>();
 }
