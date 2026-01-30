@@ -1,6 +1,7 @@
 using Luxury.KhachHang.ViewModel;
 using Luxury.Models;
 using Microsoft.AspNetCore.Mvc;
+using System.Linq;
 
 namespace KhachSanLuxury.KhachHang.Controllers
 {
@@ -65,6 +66,34 @@ namespace KhachSanLuxury.KhachHang.Controllers
             if (request.SoTien <= 0)
             {
                 return BadRequest("Số tiền không hợp lệ");
+            }
+
+            // Kiểm tra và xử lý Voucher nếu có
+            if (!string.IsNullOrEmpty(request.MaCode))
+            {
+                var voucher = _context.Vouchers.FirstOrDefault(v => v.MaCode == request.MaCode.ToUpper());
+
+                if (voucher == null || voucher.TrangThai == false)
+                    return BadRequest("Mã giảm giá không tồn tại hoặc đã bị khóa.");
+
+                if (voucher.NgayKetThuc < System.DateTime.Now)
+                    return BadRequest("Mã giảm giá đã hết hạn sử dụng.");
+
+                if (voucher.SoLuongDaDung >= voucher.SoLuong)
+                    return BadRequest("Mã giảm giá đã hết lượt sử dụng.");
+
+                // Cập nhật số lượng đã dùng của Voucher
+                voucher.SoLuongDaDung += 1;
+
+                // Gán mã Voucher vào thông tin Đặt phòng để lưu vết
+                if (request.MaDatPhong != null)
+                {
+                    var datPhong = _context.Datphongs.FirstOrDefault(x => x.MaDatPhong == request.MaDatPhong);
+                    if (datPhong != null)
+                    {
+                        datPhong.MaCode = voucher.MaCode;
+                    }
+                }
             }
 
             if (request.MaDatPhong != null)

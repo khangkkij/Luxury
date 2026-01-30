@@ -9,5 +9,6 @@ namespace Luxury.KhachHang.ViewModel
         public DateTime NgayNhan { get; set; }
         public DateTime NgayTra { get; set; }
         public decimal GiaDat { get; set; }
+        public int SoLuong { get; set; } = 1;
     }
 }
