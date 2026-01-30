@@ -116,21 +116,21 @@ namespace KhachSanLuxury.KhachHang.Controllers
                     .Select(bt => new
                     {
                         bt.MaBienThePhong,
+                        TenLoai = bt.MaLpNavigation.TenLoai,
                         bt.TenBienThe,
-                        bt.LoaiGiuong,
-                        SoNguoiToiDa=bt.SoNguoiLon,
+                        SoNguoiToiDa = bt.SoNguoiLon,
                         bt.DienTich,
-                        bt.HuongNhin,
-                        TenLoai=bt.MaLpNavigation.TenLoai,
-
-                        Gia = bt.Thietlapgia
-                            .Where(g => g.MacDinh==true)
-                            .Select(g => g.Gia)
-                            .FirstOrDefault(),
-
-                        AnhDaiDien = bt.Hinhanhs
-                            .Select(h => h.DuongDan)
-                            .FirstOrDefault()
+                        GiaGoc = bt.Thietlapgia.Where(g => g.MacDinh == true).Select(g => g.Gia).FirstOrDefault(),
+                        PhanTramGiam = bt.ChitietFlashsales
+                        .Where(fs =>
+                            fs.Flashsale.TrangThai == true &&
+                            fs.Flashsale.NgayBatDau <= DateTime.Now &&
+                            fs.Flashsale.NgayKetThuc >= DateTime.Now
+                        )
+                        .Select(fs => fs.PhanTramGiam)
+                        .FirstOrDefault(),
+                        SoPhongCon = bt.Phongs.Count(p => p.TrangThai == 1),
+                        AnhDaiDien = bt.Hinhanhs.Select(h => h.DuongDan).FirstOrDefault()
                     })
                     .ToList()
             })
