@@ -1,4 +1,4 @@
-﻿using Luxury.KhachHang.ViewModel;
+using Luxury.KhachHang.ViewModel;
 using Luxury.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
@@ -110,12 +110,13 @@ namespace Luxury.KhachHang.Controllers
         // 4. Hàm set Cookie chung
         private void SetCookie(string name, string value, int minutes)
         {
+            var isHttps = Request.IsHttps;
             var cookieOptions = new CookieOptions
             {
                 HttpOnly = true, // Quan trọng: Chống JavaScript đọc trộm
                 Expires = DateTime.UtcNow.AddMinutes(minutes),
-                Secure = true, // Bắt buộc nếu chạy HTTPS
-                SameSite = SameSiteMode.None // Để Vue gọi được API
+                Secure = isHttps, // chỉ bắt buộc khi chạy HTTPS
+                SameSite = isHttps ? SameSiteMode.None : SameSiteMode.Lax // dev HTTP dùng Lax để cookie hoạt động
             };
             Response.Cookies.Append(name, value, cookieOptions);
         }
