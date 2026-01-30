@@ -25,7 +25,10 @@ namespace KhachSanLuxury.KhachHang.Controllers
                     TenLoai = x.MaLpNavigation.TenLoai,
                     x.TenBienThe,
                     SoNguoiToiDa = x.SoNguoiLon,
+                    x.SoNguoiLon,
+                    x.SoTreEm,
                     x.DienTich,
+                    x.HuongNhin,
                     GiaGoc = x.Thietlapgia.Where(g => g.MacDinh == true).Select(g => g.Gia).FirstOrDefault(),
                     PhanTramGiam = x.ChitietFlashsales
                         .Where(fs =>
