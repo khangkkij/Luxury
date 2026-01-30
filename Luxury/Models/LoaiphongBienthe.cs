@@ -35,5 +35,6 @@ public partial class LoaiphongBienthe
 
     public virtual ICollection<Thietlapgium> Thietlapgia { get; set; } = new List<Thietlapgium>();
 
-    public virtual ICollection<Tienich> MaTis { get; set; } = new List<Tienich>();
+    public virtual ICollection<TienichLoaiphong> TienichLoaiphongs { get; set; }
+    = new List<TienichLoaiphong>();
 }

@@ -512,23 +512,23 @@ public partial class LuxuryContext : DbContext
                 .HasColumnName("tenTienIch");
             entity.Property(e => e.TrangThai).HasColumnName("trangThai");
 
-            entity.HasMany(d => d.MaBienThePhongs).WithMany(p => p.MaTis)
-                .UsingEntity<Dictionary<string, object>>(
-                    "TienichLoaiphong",
-                    r => r.HasOne<LoaiphongBienthe>().WithMany()
-                        .HasForeignKey("MaBienThePhong")
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK__TIENICH_L__MaBie__6C190EBB"),
-                    l => l.HasOne<Tienich>().WithMany()
-                        .HasForeignKey("MaTi")
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK__TIENICH_LO__maTI__6B24EA82"),
-                    j =>
-                    {
-                        j.HasKey("MaTi", "MaBienThePhong").HasName("PK__TIENICH___4B9ECE22D73FFFFD");
-                        j.ToTable("TIENICH_LOAIPHONG");
-                        j.IndexerProperty<int>("MaTi").HasColumnName("maTI");
-                    });
+            //entity.HasMany(d => d.MaBienThePhongs).WithMany(p => p.MaTis)
+            //    .UsingEntity<Dictionary<string, object>>(
+            //        "TienichLoaiphong",
+            //        r => r.HasOne<LoaiphongBienthe>().WithMany()
+            //            .HasForeignKey("MaBienThePhong")
+            //            .OnDelete(DeleteBehavior.ClientSetNull)
+            //            .HasConstraintName("FK__TIENICH_L__MaBie__6C190EBB"),
+            //        l => l.HasOne<Tienich>().WithMany()
+            //            .HasForeignKey("MaTi")
+            //            .OnDelete(DeleteBehavior.ClientSetNull)
+            //            .HasConstraintName("FK__TIENICH_LO__maTI__6B24EA82"),
+            //        j =>
+            //        {
+            //            j.HasKey("MaTi", "MaBienThePhong").HasName("PK__TIENICH___4B9ECE22D73FFFFD");
+            //            j.ToTable("TIENICH_LOAIPHONG");
+            //            j.IndexerProperty<int>("MaTi").HasColumnName("maTI");
+            //        });
         });
 
         modelBuilder.Entity<Voucher>(entity =>
