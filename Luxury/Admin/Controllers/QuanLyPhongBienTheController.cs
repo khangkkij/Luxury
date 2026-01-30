@@ -93,7 +93,7 @@ namespace Luxury.Admin.Controllers
                         .ToList(),
 
                     x.LoaiGiuong,
-                    x.SoNguoiToiDa,
+                    SoNguoiToiDa=x.SoNguoiLon,
                     x.DienTich,
 
                     TenLoai = x.MaLpNavigation.TenLoai,
@@ -172,7 +172,7 @@ namespace Luxury.Admin.Controllers
                 TenBienThe = dto.TenBienThe,
                 LoaiGiuong = dto.LoaiGiuong,
                 HuongNhin = dto.HuongNhin,
-                SoNguoiToiDa = dto.SoNguoiToiDa,
+                SoNguoiLon = dto.SoNguoiToiDa,
                 DienTich = dto.DienTich
             };
 
@@ -336,7 +336,7 @@ namespace Luxury.Admin.Controllers
                 TenBienThe = bienThe.TenBienThe,
                 LoaiGiuong = bienThe.LoaiGiuong,
                 HuongNhin = bienThe.HuongNhin,
-                SoNguoiToiDa = bienThe.SoNguoiToiDa ?? 0,
+                SoNguoiToiDa = bienThe.SoNguoiLon ?? 0,
                 DienTich = bienThe.DienTich ?? 0,
 
                 GiaNiemYet = bienThe.Thietlapgia
@@ -380,7 +380,7 @@ namespace Luxury.Admin.Controllers
                 bienThe.TenBienThe = dto.TenBienThe;
                 bienThe.LoaiGiuong = dto.LoaiGiuong;
                 bienThe.HuongNhin = dto.HuongNhin;
-                bienThe.SoNguoiToiDa = dto.SoNguoiToiDa;
+                bienThe.SoNguoiLon = dto.SoNguoiToiDa;
                 bienThe.DienTich = dto.DienTich;
 
                 // 2. Update giá mặc định

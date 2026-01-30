@@ -24,7 +24,7 @@ namespace KhachSanLuxury.KhachHang.Controllers
                     x.MaBienThePhong,
                     TenLoai = x.MaLpNavigation.TenLoai,
                     x.TenBienThe,
-                    x.SoNguoiToiDa,
+                    SoNguoiToiDa = x.SoNguoiLon,
                     x.DienTich,
                     GiaGoc = x.Thietlapgia.Where(g => g.MacDinh == true).Select(g => g.Gia).FirstOrDefault(),
                     PhanTramGiam = x.ChitietFlashsales

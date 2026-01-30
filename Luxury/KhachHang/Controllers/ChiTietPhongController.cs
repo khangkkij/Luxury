@@ -35,7 +35,7 @@ namespace KhachSanLuxury.KhachHang.Controllers
                     TenLoai = x.MaLpNavigation.TenLoai,
                     x.TenBienThe,
                     MoTa = x.MaLpNavigation.MoTa,
-                    x.SoNguoiToiDa,
+                    SoNguoiToiDa=x.SoNguoiLon,
                     x.DienTich,
 
                     GiaGoc = x.Thietlapgia
@@ -80,7 +80,7 @@ namespace KhachSanLuxury.KhachHang.Controllers
                         bt.MaBienThePhong,
                         bt.TenBienThe,
                         bt.LoaiGiuong,
-                        bt.SoNguoiToiDa,
+                        SoNguoiToiDa=bt.SoNguoiLon,
                         bt.DienTich,
                         bt.HuongNhin,
                         PhanTramGiam = bt.ChitietFlashsales
@@ -118,7 +118,7 @@ namespace KhachSanLuxury.KhachHang.Controllers
                         bt.MaBienThePhong,
                         bt.TenBienThe,
                         bt.LoaiGiuong,
-                        bt.SoNguoiToiDa,
+                        SoNguoiToiDa=bt.SoNguoiLon,
                         bt.DienTich,
                         bt.HuongNhin,
                         TenLoai=bt.MaLpNavigation.TenLoai,
