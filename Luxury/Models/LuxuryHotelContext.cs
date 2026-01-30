@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 
@@ -178,6 +178,7 @@ public partial class LuxuryHotelContext : DbContext
             entity.ToTable("DATPHONG");
 
             entity.Property(e => e.MaDatPhong).HasColumnName("maDatPhong");
+            entity.Property(e => e.MaBienThePhong).HasColumnName("maBienThePhong");
             entity.Property(e => e.MaCode)
                 .HasMaxLength(50)
                 .IsUnicode(false)
@@ -193,6 +194,10 @@ public partial class LuxuryHotelContext : DbContext
             entity.Property(e => e.TrangThai)
                 .HasMaxLength(50)
                 .HasColumnName("trangThai");
+
+            entity.HasOne(d => d.MaBienThePhongNavigation).WithMany(p => p.Datphongs)
+                .HasForeignKey(d => d.MaBienThePhong)
+                .HasConstraintName("FK__DATPHONG__maBien__5812160E");
 
             entity.HasOne(d => d.MaCodeNavigation).WithMany(p => p.Datphongs)
                 .HasForeignKey(d => d.MaCode)
