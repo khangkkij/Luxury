@@ -11,6 +11,8 @@ namespace Luxury.KhachHang.ViewModel
         public DateTime NgayTra { get; set; }
         public decimal GiaDat { get; set; }
         public int SoLuong { get; set; } = 1;
+        public int? SoNguoiLon { get; set; }
+        public int? SoTreEm { get; set; }
         public List<DatPhongItemRequest>? Items { get; set; }
     }
 

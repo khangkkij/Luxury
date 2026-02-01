@@ -83,6 +83,10 @@ namespace KhachSanLuxury.KhachHang.Controllers
             {
                 return BadRequest("Số lượng phòng không hợp lệ");
             }
+            if ((request.SoNguoiLon ?? 0) < 0 || (request.SoTreEm ?? 0) < 0)
+            {
+                return BadRequest("Số người không hợp lệ");
+            }
 
             var phongTheoLoai = new Dictionary<int, List<Phong>>();
             foreach (var item in items)
@@ -119,6 +123,7 @@ namespace KhachSanLuxury.KhachHang.Controllers
             _context.Datphongs.Add(datPhong);
             _context.SaveChanges();
 
+            var daGanSoNguoi = false;
             foreach (var item in items)
             {
                 if (!phongTheoLoai.TryGetValue(item.MaBienThePhong, out var danhSachPhong))
@@ -127,6 +132,7 @@ namespace KhachSanLuxury.KhachHang.Controllers
                 }
                 foreach (var phong in danhSachPhong)
                 {
+                    var ganSoNguoi = !daGanSoNguoi;
                     var chiTiet = new Chitietdatphong
                     {
                         MaDatPhong = datPhong.MaDatPhong,
@@ -134,8 +140,14 @@ namespace KhachSanLuxury.KhachHang.Controllers
                         GiaDat = item.GiaDat,
                         NgayNhan = request.NgayNhan,
                         NgayTra = request.NgayTra,
+                        SoNguoiLon = ganSoNguoi ? request.SoNguoiLon : null,
+                        SoTreEm = ganSoNguoi ? request.SoTreEm : null,
                         TrangThai = true
                     };
+                    if (ganSoNguoi)
+                    {
+                        daGanSoNguoi = true;
+                    }
 
                     // Chỉ trừ phòng sau khi thanh toán thành công
                     _context.Chitietdatphongs.Add(chiTiet);
