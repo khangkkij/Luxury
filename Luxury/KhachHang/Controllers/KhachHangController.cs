@@ -46,6 +46,7 @@ namespace Luxury.Controllers
                 .AsNoTracking()
                 .Where(u => u.MaKh == maKh)
                 .Select(u => new {
+                    u.MaKh,
                     u.HoVaTen,
                     u.Email,
                     u.Sdt,
