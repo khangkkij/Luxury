@@ -1,14 +1,17 @@
-﻿using Luxury.Models;
+﻿using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Luxury.Models;
+using Luxury.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddTransient<EmailService>();
+builder.Services.AddMemoryCache();
 
 // --- 1. Cấu hình Controllers & JSON (Sửa lỗi camelCase cho Voucher/Payment) ---
 builder.Services.AddControllers()
