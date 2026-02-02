@@ -22,6 +22,9 @@ namespace KhachSanLuxury.KhachHang.Controllers
         private const string LoaiDatCoc = "DatCoc";
         private const string LoaiThanhToan = "ThanhToan";
         private const string TrangThaiChoXacNhan = "ChoXacNhan";
+        private const string TrangThaiChoNhanPhong = "ChoNhanPhong";
+        private const string TrangThaiDangO = "DangO";
+        private const string TrangThaiTraPhong = "TraPhong";
         private const string TrangThaiDaThanhToan = "DaThanhToan";
 
         public ThanhToanController(LuxuryHotelContext context, IConfiguration configuration)
@@ -231,7 +234,7 @@ namespace KhachSanLuxury.KhachHang.Controllers
                 var datPhong = _context.Datphongs.FirstOrDefault(x => x.MaDatPhong == thanhToan.MaDatPhong);
                 if (datPhong != null)
                 {
-                    datPhong.TrangThai = TrangThaiDaThanhToan;
+                    datPhong.TrangThai = TrangThaiChoNhanPhong;
                 }
             }
 
@@ -351,15 +354,7 @@ namespace KhachSanLuxury.KhachHang.Controllers
 
                 if (datPhong != null)
                 {
-                    datPhong.TrangThai = TrangThaiDaThanhToan;
-
-                    foreach (var ct in datPhong.Chitietdatphongs)
-                    {
-                        if (ct.MaPhongNavigation != null)
-                        {
-                            ct.MaPhongNavigation.TrangThai = 2;
-                        }
-                    }
+                    datPhong.TrangThai = TrangThaiChoNhanPhong;
                 }
             }
 
