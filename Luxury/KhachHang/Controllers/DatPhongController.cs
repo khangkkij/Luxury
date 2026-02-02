@@ -13,7 +13,7 @@ namespace KhachSanLuxury.KhachHang.Controllers
     {
         private readonly LuxuryHotelContext _context;
 
-        private const string TrangThaiChoXacNhan = "ChoXacNhan";
+        private const string TrangThaiChoXacNhan = "Chonhanphong";
 
         public DatPhongController(LuxuryHotelContext context)
         {
