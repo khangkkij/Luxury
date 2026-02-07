@@ -93,7 +93,8 @@ namespace Luxury.Admin.Controllers
                         .ToList(),
 
                     x.LoaiGiuong,
-                    SoNguoiToiDa=x.SoNguoiLon,
+                    x.SoNguoiLon,
+                    x.SoTreEm,
                     x.DienTich,
 
                     TenLoai = x.MaLpNavigation.TenLoai,
@@ -172,7 +173,8 @@ namespace Luxury.Admin.Controllers
                 TenBienThe = dto.TenBienThe,
                 LoaiGiuong = dto.LoaiGiuong,
                 HuongNhin = dto.HuongNhin,
-                SoNguoiLon = dto.SoNguoiToiDa,
+                SoNguoiLon = dto.SoNguoiLon,
+                SoTreEm = dto.SoTreEm,
                 DienTich = dto.DienTich
             };
 
@@ -336,7 +338,8 @@ namespace Luxury.Admin.Controllers
                 TenBienThe = bienThe.TenBienThe,
                 LoaiGiuong = bienThe.LoaiGiuong,
                 HuongNhin = bienThe.HuongNhin,
-                SoNguoiToiDa = bienThe.SoNguoiLon ?? 0,
+                SoNguoiLon = bienThe.SoNguoiLon ?? 0,
+                SoTreEm = bienThe.SoTreEm ?? 0,
                 DienTich = bienThe.DienTich ?? 0,
 
                 GiaNiemYet = bienThe.Thietlapgia
@@ -367,8 +370,8 @@ namespace Luxury.Admin.Controllers
                 {
                     return BadRequest("Tên biến thể phòng đã tồn tại");
                 }
-                if (dto.Images == null || dto.Images.Count == 0)
-                    return BadRequest("Phải có ít nhất 1 hình ảnh");
+                //if (dto.Images == null || dto.Images.Count == 0)
+                //    return BadRequest("Phải có ít nhất 1 hình ảnh");
                 var bienThe = await _context.LoaiphongBienthes
                     .FirstOrDefaultAsync(x => x.MaBienThePhong == id);
 
@@ -380,7 +383,8 @@ namespace Luxury.Admin.Controllers
                 bienThe.TenBienThe = dto.TenBienThe;
                 bienThe.LoaiGiuong = dto.LoaiGiuong;
                 bienThe.HuongNhin = dto.HuongNhin;
-                bienThe.SoNguoiLon = dto.SoNguoiToiDa;
+                bienThe.SoNguoiLon = dto.SoNguoiLon;
+                bienThe.SoTreEm = dto.SoTreEm;
                 bienThe.DienTich = dto.DienTich;
 
                 // 2. Update giá mặc định
