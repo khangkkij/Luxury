@@ -41,7 +41,12 @@ namespace KhachSanLuxury.KhachHang.Controllers
                     SoPhongCon = x.Phongs.Count(p => p.TrangThai == 1),
                     AnhDaiDien = x.Hinhanhs.Select(h => h.DuongDan).FirstOrDefault()
                 });
-            return Ok(ds);
+            var dsLoaiPhong=_context.Loaiphongs.ToList();
+            return Ok(new
+            {
+                DanhSach = ds,
+                LoaiPhong = dsLoaiPhong
+            });
         }
     }
 }
