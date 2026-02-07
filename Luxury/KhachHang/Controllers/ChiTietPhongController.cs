@@ -36,6 +36,7 @@ namespace KhachSanLuxury.KhachHang.Controllers
                     x.TenBienThe,
                     MoTa = x.MaLpNavigation.MoTa,
                     SoNguoiToiDa=x.SoNguoiLon,
+                    x.SoTreEm,
                     x.DienTich,
 
                     GiaGoc = x.Thietlapgia
@@ -81,6 +82,7 @@ namespace KhachSanLuxury.KhachHang.Controllers
                         bt.TenBienThe,
                         bt.LoaiGiuong,
                         SoNguoiToiDa=bt.SoNguoiLon,
+                        x.SoTreEm,
                         bt.DienTich,
                         bt.HuongNhin,
                         PhanTramGiam = bt.ChitietFlashsales
@@ -119,6 +121,7 @@ namespace KhachSanLuxury.KhachHang.Controllers
                         TenLoai = bt.MaLpNavigation.TenLoai,
                         bt.TenBienThe,
                         SoNguoiToiDa = bt.SoNguoiLon,
+                        x.SoTreEm,
                         bt.DienTich,
                         GiaGoc = bt.Thietlapgia.Where(g => g.MacDinh == true).Select(g => g.Gia).FirstOrDefault(),
                         PhanTramGiam = bt.ChitietFlashsales

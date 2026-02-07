@@ -6,7 +6,8 @@
         public string? TenBienThe { get; set; }
         public string? LoaiGiuong { get; set; }
         public string? HuongNhin { get; set; }
-        public int SoNguoiToiDa { get; set; }
+        public int SoNguoiLon { get; set; }
+        public int SoTreEm { get; set; }
         public decimal DienTich { get; set; }
         public decimal GiaNiemYet { get; set; }
 
