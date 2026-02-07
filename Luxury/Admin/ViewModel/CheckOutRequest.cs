@@ -12,6 +12,7 @@ namespace Luxury.Admin.ViewModel
         public string? VoucherCode { get; set; }
         public string? HinhThucThanhToan { get; set; }
         public DateTime? ThoiGianTraThucTe { get; set; }
+        public bool? SuDungTienCoc { get; set; }
         public List<ServiceUsageRequest>? ExtraServices { get; set; }
     }
 
