@@ -329,50 +329,35 @@ namespace Luxury.Admin.Controllers
         [HttpGet("checkout-detail/{maDatPhong}")]
         public IActionResult GetCheckOutDetail(int maDatPhong)
         {
-            if (maDatPhong <= 0)
-            {
-                return BadRequest("MaDatPhong không hợp lệ");
-            }
+            if (maDatPhong <= 0) return BadRequest("MaDatPhong không hợp lệ");
 
             var datPhong = _context.Datphongs
                 .Include(x => x.MaKhNavigation)
-                .Include(x => x.Chitietdatphongs)
-                    .ThenInclude(ct => ct.MaPhongNavigation)
-                        .ThenInclude(p => p.MaBienThePhongNavigation)
-                            .ThenInclude(bt => bt.Thietlapgia)
-                .Include(x => x.Chitietdatphongs)
-                    .ThenInclude(ct => ct.SudungDichvus)
-                        .ThenInclude(sd => sd.MaDichVuNavigation)
+                .Include(x => x.Chitietdatphongs).ThenInclude(ct => ct.MaPhongNavigation).ThenInclude(p => p.MaBienThePhongNavigation).ThenInclude(bt => bt.Thietlapgia)
+                .Include(x => x.Chitietdatphongs).ThenInclude(ct => ct.SudungDichvus).ThenInclude(sd => sd.MaDichVuNavigation)
                 .FirstOrDefault(x => x.MaDatPhong == maDatPhong);
 
-            if (datPhong == null)
-            {
-                return NotFound("Không tìm thấy đặt phòng");
-            }
+            if (datPhong == null) return NotFound("Không tìm thấy đặt phòng");
 
             var chiTiet = datPhong.Chitietdatphongs.FirstOrDefault(ct => ct.TrangThai == true);
-            if (chiTiet == null)
-            {
-                return NotFound("Không có chi tiết đặt phòng đang ở");
-            }
+            if (chiTiet == null) return NotFound("Không có chi tiết đặt phòng đang ở");
 
-            var giaMacDinh = chiTiet.MaPhongNavigation?
-                .MaBienThePhongNavigation?
-                .Thietlapgia
-                .Where(x => x.MacDinh == true)
-                .Select(x => x.Gia)
-                .FirstOrDefault();
+            var giaMacDinh = chiTiet.MaPhongNavigation?.MaBienThePhongNavigation?.Thietlapgia
+                .Where(x => x.MacDinh == true).Select(x => x.Gia).FirstOrDefault();
 
             var giaDat = chiTiet.GiaDat ?? giaMacDinh ?? 0;
             var ngayNhan = chiTiet.NgayNhan ?? DateTime.Now;
             var ngayTra = chiTiet.NgayTra ?? DateTime.Now;
             var soDem = Math.Max(1, (ngayTra.Date - ngayNhan.Date).Days);
 
-            var tienCoc = _context.Thanhtoans
+            // --- SỬA: Lấy tổng tiền đã thanh toán (bất kể là Cọc hay Thanh toán 100%) ---
+            // Loại trừ khoản hoàn tiền cũ
+            var daThanhToan = _context.Thanhtoans
                 .Where(x => x.MaDatPhong == maDatPhong &&
-                            (x.LoaiThanhToan == LoaiTamUng || x.LoaiThanhToan == "DatCoc") &&
-                            x.TrangThai == TrangThaiDaThanhToan)
+                            x.TrangThai == TrangThaiDaThanhToan &&
+                            x.LoaiThanhToan != "HoanTien")
                 .Sum(x => x.SoTien ?? 0);
+            // -------------------------------------------------------------------------
 
             return Ok(new
             {
@@ -385,7 +370,7 @@ namespace Luxury.Admin.Controllers
                 ngayTra = ngayTra,
                 soDem = soDem,
                 giaDat = giaDat,
-                tienCoc = tienCoc,
+                tienCoc = daThanhToan, // Trả về tổng tiền đã đóng vào biến tienCoc cho FE dùng
                 dichVu = chiTiet.SudungDichvus.Select(sd => new
                 {
                     maDichVu = sd.MaDichVu,
@@ -408,101 +393,89 @@ namespace Luxury.Admin.Controllers
             var discount = PreviewVoucherDiscount(request.VoucherCode, request.TongTienGoc, out var message);
             return Ok(new { soTienGiam = discount, message });
         }
-
         [HttpPost("check-out")]
         public IActionResult CheckOut([FromBody] CheckOutRequest request)
         {
-            if (request.MaDatPhong <= 0)
-            {
-                return BadRequest("MaDatPhong không hợp lệ");
-            }
+            if (request.MaDatPhong <= 0) return BadRequest("MaDatPhong không hợp lệ");
 
             var datPhong = _context.Datphongs
-                .Include(x => x.Chitietdatphongs)
-                    .ThenInclude(ct => ct.MaPhongNavigation)
-                .Include(x => x.Chitietdatphongs)
-                    .ThenInclude(ct => ct.SudungDichvus)
-                        .ThenInclude(sd => sd.MaDichVuNavigation)
+                .Include(x => x.Chitietdatphongs).ThenInclude(ct => ct.MaPhongNavigation)
+                .Include(x => x.Chitietdatphongs).ThenInclude(ct => ct.SudungDichvus).ThenInclude(sd => sd.MaDichVuNavigation)
                 .Include(x => x.Hoadons)
                 .FirstOrDefault(x => x.MaDatPhong == request.MaDatPhong);
 
-            if (datPhong == null)
-            {
-                return NotFound("Không tìm thấy đặt phòng");
-            }
+            if (datPhong == null) return NotFound("Không tìm thấy đặt phòng");
 
             var chiTiet = ResolveCheckOutDetail(datPhong, request);
-            if (chiTiet == null)
-            {
-                return BadRequest("Không tìm thấy chi tiết đặt phòng phù hợp");
-            }
+            if (chiTiet == null) return BadRequest("Không tìm thấy chi tiết đặt phòng phù hợp");
+            if (chiTiet.MaPhongNavigation == null) return BadRequest("Chi tiết đặt phòng chưa được gán phòng");
 
-            if (chiTiet.MaPhongNavigation == null)
-            {
-                return BadRequest("Chi tiết đặt phòng chưa được gán phòng");
-            }
-
+            // 1. Cập nhật dịch vụ phụ
             if (request.ExtraServices != null && request.ExtraServices.Count > 0)
             {
                 foreach (var item in request.ExtraServices)
                 {
-                    if (item.MaDichVu <= 0 || item.SoLuong <= 0)
-                    {
-                        return BadRequest("Dịch vụ không hợp lệ");
-                    }
-
+                    if (item.MaDichVu <= 0 || item.SoLuong <= 0) continue;
                     var dichVu = _context.Dichvus.FirstOrDefault(x => x.MaDichVu == item.MaDichVu && x.TrangThai == true);
-                    if (dichVu == null)
-                    {
-                        return BadRequest($"Không tìm thấy dịch vụ {item.MaDichVu}");
-                    }
+                    if (dichVu == null) return BadRequest($"Không tìm thấy dịch vụ {item.MaDichVu}");
 
-                    var thanhTien = (dichVu.Gia ?? 0) * item.SoLuong;
-                    var suDung = new SudungDichvu
+                    chiTiet.SudungDichvus.Add(new SudungDichvu
                     {
                         MaCtdp = chiTiet.MaCtdp,
                         MaDichVu = dichVu.MaDichVu,
                         SoLuong = item.SoLuong,
                         NgaySuDung = DateTime.Now,
-                        ThanhTien = thanhTien
-                    };
-                    chiTiet.SudungDichvus.Add(suDung);
+                        ThanhTien = (dichVu.Gia ?? 0) * item.SoLuong
+                    });
                 }
+                _context.SaveChanges();
             }
 
-            _context.SaveChanges();
-
+            // 2. Tính toán tiền
             var giaDat = chiTiet.GiaDat ?? 0;
             var ngayNhan = chiTiet.NgayNhan ?? DateTime.Now;
             var thoiGianTra = request.ThoiGianTraThucTe ?? DateTime.Now;
             var soDem = Math.Max(1, (thoiGianTra.Date - ngayNhan.Date).Days);
+
             var tienPhong = giaDat * soDem;
             var phuThuGio = thoiGianTra.TimeOfDay > new TimeSpan(12, 0, 0) ? Math.Round(giaDat * 0.3m) : 0;
-
-            var tienDichVu = chiTiet.SudungDichvus.Sum(sd =>
-                sd.ThanhTien ??
-                ((sd.MaDichVuNavigation?.Gia ?? 0) * (sd.SoLuong ?? 0))
-            );
-
+            var tienDichVu = chiTiet.SudungDichvus.Sum(sd => sd.ThanhTien ?? ((sd.MaDichVuNavigation?.Gia ?? 0) * (sd.SoLuong ?? 0)));
             var phuThu = (request.ExtraFee ?? 0) + phuThuGio;
+
             var tongTienGoc = tienPhong + tienDichVu + phuThu;
+
+            // 2. Trừ Voucher
             var soTienGiam = ApplyVoucher(datPhong, request.VoucherCode, tongTienGoc, out var voucherMessage);
-            var tienCoc = _context.Thanhtoans
+
+            // 3. Lấy TỔNG TIỀN KHÁCH ĐÃ ĐƯA (Cọc + TT trước)
+            var daThanhToan = _context.Thanhtoans
                 .Where(x => x.MaDatPhong == datPhong.MaDatPhong &&
-                            (x.LoaiThanhToan == LoaiTamUng || x.LoaiThanhToan == "DatCoc") &&
-                            x.TrangThai == TrangThaiDaThanhToan)
+                            x.TrangThai == TrangThaiDaThanhToan &&
+                            x.LoaiThanhToan != "HoanTien")
                 .Sum(x => x.SoTien ?? 0);
-            var tongTienPhaiTra = tongTienGoc - soTienGiam - tienCoc;
-            var soTienHoan = tongTienPhaiTra < 0 ? Math.Abs(tongTienPhaiTra) : 0;
+
+            var suDungTienCoc = request.SuDungTienCoc ?? true;
+            var tienDaDongApDung = suDungTienCoc ? daThanhToan : 0;
+
+            // 4. PHÉP TÍNH QUAN TRỌNG NHẤT:
+            // Lấy Tổng Hóa Đơn - Tổng Đã Đưa
+            var tongTienPhaiTra = tongTienGoc - soTienGiam - tienDaDongApDung;
+
+            // 5. Nếu kết quả ÂM (tức là khách đưa thừa tiền), thì chốt là 0 đồng (Không hoàn tiền)
+            // Còn nếu DƯƠNG (tức là còn thiếu 70% tiền phòng hoặc thiếu tiền dịch vụ) thì giữ nguyên để thu.
+            if (tongTienPhaiTra < 0)
+            {
+                tongTienPhaiTra = 0;
+            }
+
+            var soTienHoan = 0; // Luôn bằng 0
+            var tongHoan = 0;
+            // --- KẾT THÚC ĐOẠN SỬA ---
 
             var hoaDon = datPhong.Hoadons.FirstOrDefault();
             if (hoaDon == null)
             {
-                hoaDon = new Hoadon
-                {
-                    MaDatPhong = datPhong.MaDatPhong,
-                    NgayTao = DateTime.Now
-                };
+                hoaDon = new Hoadon { MaDatPhong = datPhong.MaDatPhong, NgayTao = DateTime.Now };
                 _context.Hoadons.Add(hoaDon);
                 _context.SaveChanges();
             }
@@ -511,15 +484,15 @@ namespace Luxury.Admin.Controllers
             hoaDon.SoTienGiam = soTienGiam;
             hoaDon.TongTienPhaiTra = tongTienPhaiTra;
 
-            datPhong.TrangThai = datPhong.Chitietdatphongs.Any(ct => ct.TrangThai == true)
-                ? TrangThaiDangO
-                : TrangThaiTraPhong;
+            datPhong.TrangThai = datPhong.Chitietdatphongs.Any(ct => ct.TrangThai == true && ct.MaCtdp != chiTiet.MaCtdp)
+                ? TrangThaiDangO : TrangThaiTraPhong;
             datPhong.MaNv = request.MaNv ?? datPhong.MaNv;
 
             chiTiet.TrangThai = false;
             chiTiet.NgayTra = thoiGianTra;
             chiTiet.MaPhongNavigation.TrangThai = 3;
 
+            // 4. Tạo thanh toán nếu còn thiếu
             if (tongTienPhaiTra > 0)
             {
                 var thanhToan = new Thanhtoan
@@ -533,19 +506,7 @@ namespace Luxury.Admin.Controllers
                 };
                 _context.Thanhtoans.Add(thanhToan);
             }
-            else if (soTienHoan > 0)
-            {
-                var hoanTien = new Thanhtoan
-                {
-                    MaDatPhong = datPhong.MaDatPhong,
-                    MaHd = hoaDon.MaHd,
-                    LoaiThanhToan = "HoanTien",
-                    SoTien = soTienHoan,
-                    HinhThucThanhToan = request.HinhThucThanhToan ?? "cash",
-                    TrangThai = TrangThaiDaThanhToan
-                };
-                _context.Thanhtoans.Add(hoanTien);
-            }
+            // Đã xóa phần tạo thanh toán hoàn tiền
 
             _context.SaveChanges();
 
@@ -556,9 +517,10 @@ namespace Luxury.Admin.Controllers
                 maHd = hoaDon.MaHd,
                 tongTienGoc,
                 soTienGiam,
-                tienCoc,
+                tienCoc = daThanhToan,
+                tienCocApDung = tienDaDongApDung,
                 tongTienPhaiTra,
-                soTienHoan,
+                soTienHoan = 0,
                 voucherMessage
             });
         }
