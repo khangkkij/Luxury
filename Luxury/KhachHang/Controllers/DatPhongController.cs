@@ -2,6 +2,8 @@ using Luxury.KhachHang.ViewModel;
 using Luxury.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 namespace KhachSanLuxury.KhachHang.Controllers
 {
@@ -11,27 +13,41 @@ namespace KhachSanLuxury.KhachHang.Controllers
     {
         private readonly LuxuryHotelContext _context;
 
-        private const string TrangThaiChoThanhToan = "ChoThanhToan";
-        private const string TrangThaiDaXacNhan = "DaXacNhan";
+        private const string TrangThaiChoXacNhan = "Chonhanphong";
 
         public DatPhongController(LuxuryHotelContext context)
         {
             _context = context;
         }
 
+        private int? GetMaKhFromCookie()
+        {
+            var token = Request.Cookies["AuthToken"];
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return null;
+            }
+
+            try
+            {
+                var handler = new JwtSecurityTokenHandler();
+                var jwt = handler.ReadJwtToken(token);
+                var claim = jwt.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier || c.Type == "nameid");
+                if (claim == null)
+                {
+                    return null;
+                }
+                return int.TryParse(claim.Value, out var id) ? id : (int?)null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         [HttpPost("tao")]
         public IActionResult TaoDatPhong([FromBody] DatPhongRequest request)
         {
-            if (request.MaBienThePhong <= 0)
-            {
-                return BadRequest("MaBienThePhong không hợp lệ");
-            }
-
-            if (request.GiaDat <= 0)
-            {
-                return BadRequest("GiaDat không hợp lệ");
-            }
-
             if (request.NgayTra.Date <= request.NgayNhan.Date)
             {
                 return BadRequest("Ngày trả phải sau ngày nhận");
@@ -43,39 +59,91 @@ namespace KhachSanLuxury.KhachHang.Controllers
                 return BadRequest("Số đêm không hợp lệ");
             }
 
-            var phongTrong = _context.Phongs
-                .FirstOrDefault(p => p.MaBienThePhong == request.MaBienThePhong && p.TrangThai == 0);
+            var items = request.Items != null && request.Items.Count > 0
+                ? request.Items
+                : new List<DatPhongItemRequest>
+                {
+                    new DatPhongItemRequest
+                    {
+                        MaBienThePhong = request.MaBienThePhong,
+                        GiaDat = request.GiaDat,
+                        SoLuong = request.SoLuong
+                    }
+                };
 
-            if (phongTrong == null)
+            if (items.Any(x => x.MaBienThePhong <= 0))
             {
-                return BadRequest("Không còn phòng trống");
+                return BadRequest("MaBienThePhong không hợp lệ");
+            }
+            if (items.Any(x => x.GiaDat <= 0))
+            {
+                return BadRequest("GiaDat không hợp lệ");
+            }
+            if (items.Any(x => x.SoLuong <= 0))
+            {
+                return BadRequest("Số lượng phòng không hợp lệ");
+            }
+            if ((request.SoNguoiLon ?? 0) < 0 || (request.SoTreEm ?? 0) < 0)
+            {
+                return BadRequest("Số người không hợp lệ");
             }
 
-            var tongTien = request.GiaDat * soDem;
+            foreach (var item in items)
+            {
+                var soPhongTrong = _context.Phongs.Count(p =>
+                    p.MaBienThePhong == item.MaBienThePhong && p.TrangThai == 1);
+                if (soPhongTrong < item.SoLuong)
+                {
+                    return BadRequest("Không đủ phòng trống");
+                }
+            }
+
+            var tongTien = items.Sum(x => x.GiaDat * soDem * x.SoLuong);
+
+            var maKh = request.MaKh ?? GetMaKhFromCookie();
+            if (maKh == null || maKh <= 0)
+            {
+                return Unauthorized("Vui lòng đăng nhập để đặt phòng");
+            }
 
             var datPhong = new Datphong
             {
-                MaKh = request.MaKh,
+                MaKh = maKh,
+                MaBienThePhong = items.FirstOrDefault()?.MaBienThePhong,
                 NgayDat = DateTime.Now,
                 TongTienDuKien = tongTien,
-                TrangThai = TrangThaiChoThanhToan
+                TrangThai = TrangThaiChoXacNhan
             };
 
             _context.Datphongs.Add(datPhong);
             _context.SaveChanges();
 
-            var chiTiet = new Chitietdatphong
+            var daGanSoNguoi = false;
+            foreach (var item in items)
             {
-                MaDatPhong = datPhong.MaDatPhong,
-                MaPhong = phongTrong.MaPhong,
-                GiaDat = request.GiaDat,
-                NgayNhan = request.NgayNhan,
-                NgayTra = request.NgayTra,
-                TrangThai = true
-            };
+                for (var i = 0; i < item.SoLuong; i++)
+                {
+                    var ganSoNguoi = !daGanSoNguoi;
+                    var chiTiet = new Chitietdatphong
+                    {
+                        MaDatPhong = datPhong.MaDatPhong,
+                        MaPhong = null,
+                        GiaDat = item.GiaDat,
+                        NgayNhan = request.NgayNhan,
+                        NgayTra = request.NgayTra,
+                        SoNguoiLon = ganSoNguoi ? request.SoNguoiLon : null,
+                        SoTreEm = ganSoNguoi ? request.SoTreEm : null,
+                        TrangThai = true
+                    };
+                    if (ganSoNguoi)
+                    {
+                        daGanSoNguoi = true;
+                    }
 
-            phongTrong.TrangThai = 1;
-            _context.Chitietdatphongs.Add(chiTiet);
+                    // Chỉ trừ phòng sau khi thanh toán thành công
+                    _context.Chitietdatphongs.Add(chiTiet);
+                }
+            }
             _context.SaveChanges();
 
             return Ok(new
@@ -123,7 +191,7 @@ namespace KhachSanLuxury.KhachHang.Controllers
                 NgayTao = DateTime.Now
             };
 
-            datPhong.TrangThai = TrangThaiDaXacNhan;
+            datPhong.TrangThai = TrangThaiChoXacNhan;
             _context.Hoadons.Add(hoaDon);
             _context.SaveChanges();
 

@@ -9,6 +9,8 @@ public partial class Datphong
 
     public int? MaKh { get; set; }
 
+    public int? MaBienThePhong { get; set; }
+
     public int? MaNv { get; set; }
 
     public string? MaCode { get; set; }
@@ -24,6 +26,8 @@ public partial class Datphong
     public virtual ICollection<Danhgium> Danhgia { get; set; } = new List<Danhgium>();
 
     public virtual ICollection<Hoadon> Hoadons { get; set; } = new List<Hoadon>();
+
+    public virtual LoaiphongBienthe? MaBienThePhongNavigation { get; set; }
 
     public virtual Voucher? MaCodeNavigation { get; set; }
 

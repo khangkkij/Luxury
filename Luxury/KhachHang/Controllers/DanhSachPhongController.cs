@@ -1,4 +1,4 @@
-﻿using Luxury.Models;
+using Luxury.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -24,8 +24,11 @@ namespace KhachSanLuxury.KhachHang.Controllers
                     x.MaBienThePhong,
                     TenLoai = x.MaLpNavigation.TenLoai,
                     x.TenBienThe,
-                    x.SoNguoiToiDa,
+                    SoNguoiToiDa = x.SoNguoiLon,
+                    x.SoNguoiLon,
+                    x.SoTreEm,
                     x.DienTich,
+                    x.HuongNhin,
                     GiaGoc = x.Thietlapgia.Where(g => g.MacDinh == true).Select(g => g.Gia).FirstOrDefault(),
                     PhanTramGiam = x.ChitietFlashsales
                         .Where(fs =>
@@ -35,7 +38,7 @@ namespace KhachSanLuxury.KhachHang.Controllers
                         )
                         .Select(fs => fs.PhanTramGiam)
                         .FirstOrDefault(),
-                    SoPhongCon = x.Phongs.Count(p => p.TrangThai == 0),
+                    SoPhongCon = x.Phongs.Count(p => p.TrangThai == 1),
                     AnhDaiDien = x.Hinhanhs.Select(h => h.DuongDan).FirstOrDefault()
                 });
             return Ok(ds);
