@@ -32,10 +32,13 @@ namespace Luxury.Admin.Controllers
             _configuration = configuration;
         }
 
+        // 1. Thay thế hàm GetBookingsReadyForCheckIn cũ bằng hàm này
         [HttpGet("bookings-ready")]
         public IActionResult GetBookingsReadyForCheckIn()
         {
             var normalizedReadyStatus = TrangThaiChoNhanPhong.ToLowerInvariant();
+
+            // Thêm .Trim() vào đây để tìm kiếm chính xác hơn
             var raw = _context.Datphongs
                 .Include(x => x.MaKhNavigation)
                 .Include(x => x.Chitietdatphongs)
@@ -64,6 +67,13 @@ namespace Luxury.Admin.Controllers
                 }).ToList();
 
                 var chiTiet = x.Chitietdatphongs.FirstOrDefault();
+
+                // --- MỚI: Tính tổng tiền khách đã cọc/thanh toán trước ---
+                var daThanhToan = _context.Thanhtoans
+                    .Where(t => t.MaDatPhong == x.MaDatPhong && t.TrangThai == TrangThaiDaThanhToan)
+                    .Sum(t => t.SoTien) ?? 0;
+                // --------------------------------------------------------
+
                 return new
                 {
                     maDatPhong = x.MaDatPhong,
@@ -73,6 +83,11 @@ namespace Luxury.Admin.Controllers
                     ngayTra = chiTiet?.NgayTra,
                     soPhongCanGan = pendingRooms,
                     phongTrong = availableRooms,
+                    // Trả về số tiền đã cọc để hiển thị lên Vue
+                    daThanhToan = daThanhToan,
+                    // Fallback key để tương thích nhiều bản frontend
+                    tienCoc = daThanhToan,
+                    tongTienDuKien = x.TongTienDuKien,
                     chiTietDatPhongs = x.Chitietdatphongs
                         .Where(ct => ct.TrangThai == true)
                         .Select(ct => new
@@ -89,6 +104,7 @@ namespace Luxury.Admin.Controllers
             return Ok(bookings);
         }
 
+        // 2. Thay thế hàm CheckIn cũ bằng hàm này (Đã fix lỗi string space)
         [HttpPost("check-in")]
         public IActionResult CheckIn([FromBody] CheckInRequest request)
         {
@@ -106,18 +122,16 @@ namespace Luxury.Admin.Controllers
                 return NotFound("Không tìm thấy đặt phòng");
             }
 
-            // --- SỬA ĐOẠN NÀY ---
-            // Xử lý chuỗi an toàn hơn: Cắt khoảng trắng thừa và so sánh không phân biệt hoa thường
+            // --- FIX LỖI Ở ĐÂY: Dùng Trim() và so sánh không phân biệt hoa thường ---
             var trangThaiHienTai = (datPhong.TrangThai ?? "").Trim();
             bool isReady = string.Equals(trangThaiHienTai, TrangThaiChoNhanPhong, StringComparison.OrdinalIgnoreCase);
             bool isStaying = string.Equals(trangThaiHienTai, TrangThaiDangO, StringComparison.OrdinalIgnoreCase);
 
             if (!isReady && !isStaying)
             {
-                // Trả về lỗi kèm trạng thái thực tế để dễ debug nếu vẫn lỗi
-                return BadRequest($"Đặt phòng chưa sẵn sàng check-in (Trạng thái hiện tại: {datPhong.TrangThai})");
+                return BadRequest($"Đặt phòng chưa sẵn sàng check-in (Trạng thái: {trangThaiHienTai})");
             }
-            // ---------------------
+            // ------------------------------------------------------------------------
 
             var phong = _context.Phongs.FirstOrDefault(x => x.MaPhong == request.MaPhong);
             if (phong == null)
