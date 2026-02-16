@@ -1,9 +1,10 @@
-﻿using Luxury.Models;
+﻿using System.Runtime.Intrinsics.Arm;
+using Luxury.KhachHang.ViewModel;
+using Luxury.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Runtime.Intrinsics.Arm;
 namespace Luxury.KhachHang.Controllers
 {
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
@@ -157,5 +158,53 @@ namespace Luxury.KhachHang.Controllers
                 return StatusCode(500, "Lỗi hệ thống khi xóa: " + ex.Message);
             }
         }
+
+        [HttpGet("GetByRoom/{variantId}")]
+        [AllowAnonymous]
+		public async Task<IActionResult> GetReviewsByVariant(int variantId)
+		{
+			try
+			{
+				// Truy vấn: 
+				// 1. Lấy bảng đánh giá
+				// 2. Kèm thông tin Đặt phòng -> Khách hàng (để lấy tên/avatar)
+				// 3. Kèm thông tin Phòng (để check xem phòng này có thuộc variantId đang xem không)
+				var reviews = await _context.Danhgia
+					.Include(dg => dg.MaDatPhongNavigation)
+						.ThenInclude(dp => dp.MaKhNavigation) // Join sang bảng Khách hàng
+					.Include(dg => dg.MaPhongNavigation)      // Join sang bảng Phòng
+					.Where(dg =>
+						dg.MaPhongNavigation.MaBienThePhong == variantId && // Chỉ lấy đánh giá thuộc loại phòng này
+						dg.TrangThai == 1 // Chỉ lấy đánh giá đã được duyệt (nếu quy định 1 là hiện)
+					)
+					.OrderByDescending(dg => dg.NgayDanhGia) // Mới nhất lên đầu
+					.Select(dg => new DanhGiaViewModel
+					{
+						MaDg = dg.MaDg,
+						SoSao = dg.SoSao ?? 0,
+						NoiDung = dg.NoiDung,
+						NgayDanhGia = dg.NgayDanhGia ?? DateTime.Now,
+						PhanHoi = dg.PhanHoi,
+
+						// Xử lý lấy tên khách hàng an toàn (null check)
+						TenKhachHang = dg.MaDatPhongNavigation != null && dg.MaDatPhongNavigation.MaKhNavigation != null
+									   ? dg.MaDatPhongNavigation.MaKhNavigation.HoVaTen
+									   : "Khách hàng ẩn danh",
+
+						// Lấy avatar, nếu null thì Frontend sẽ tự xử lý avatar mặc định
+						Avatar = dg.MaDatPhongNavigation != null && dg.MaDatPhongNavigation.MaKhNavigation != null
+								 ? dg.MaDatPhongNavigation.MaKhNavigation.HinhAnh
+								 : null
+					})
+					.ToListAsync();
+
+				return Ok(reviews);
+			}
+			catch (Exception ex)
+			{
+				return StatusCode(500, "Lỗi server: " + ex.Message);
+			}
+		}
+	}
     }
-}
+
