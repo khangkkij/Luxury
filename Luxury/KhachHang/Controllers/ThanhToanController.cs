@@ -46,10 +46,10 @@ namespace KhachSanLuxury.KhachHang.Controllers
                 return BadRequest("Số tiền không hợp lệ");
             }
 
-            var datPhongExists = _context.Datphongs.Any(x => x.MaDatPhong == request.MaDatPhong);
-            if (!datPhongExists)
+            var voucherError = ApplyVoucherToBookingAndInvoice(request.MaDatPhong.Value, request.MaCode);
+            if (!string.IsNullOrEmpty(voucherError))
             {
-                return NotFound("Không tìm thấy đặt phòng");
+                return BadRequest(voucherError);
             }
 
             var thanhToan = new Thanhtoan
@@ -113,40 +113,17 @@ namespace KhachSanLuxury.KhachHang.Controllers
                 return BadRequest("Số tiền không hợp lệ");
             }
 
-            // Kiểm tra và xử lý Voucher nếu có
-            if (!string.IsNullOrEmpty(request.MaCode))
+            if (!string.IsNullOrWhiteSpace(request.MaCode) && (request.MaDatPhong == null || request.MaDatPhong <= 0))
             {
-                var voucher = _context.Vouchers.FirstOrDefault(v => v.MaCode == request.MaCode.ToUpper());
-
-                if (voucher == null || voucher.TrangThai == false)
-                    return BadRequest("Mã giảm giá không tồn tại hoặc đã bị khóa.");
-
-                if (voucher.NgayKetThuc < System.DateTime.Now)
-                    return BadRequest("Mã giảm giá đã hết hạn sử dụng.");
-
-                if (voucher.SoLuongDaDung >= voucher.SoLuong)
-                    return BadRequest("Mã giảm giá đã hết lượt sử dụng.");
-
-                // Cập nhật số lượng đã dùng của Voucher
-                voucher.SoLuongDaDung += 1;
-
-                // Gán mã Voucher vào thông tin Đặt phòng để lưu vết
-                if (request.MaDatPhong != null)
-                {
-                    var datPhong = _context.Datphongs.FirstOrDefault(x => x.MaDatPhong == request.MaDatPhong);
-                    if (datPhong != null)
-                    {
-                        datPhong.MaCode = voucher.MaCode;
-                    }
-                }
+                return BadRequest("Áp dụng mã giảm giá cần MaDatPhong hợp lệ.");
             }
 
             if (request.MaDatPhong != null)
             {
-                var datPhongExists = _context.Datphongs.Any(x => x.MaDatPhong == request.MaDatPhong);
-                if (!datPhongExists)
+                var voucherError = ApplyVoucherToBookingAndInvoice(request.MaDatPhong.Value, request.MaCode);
+                if (!string.IsNullOrEmpty(voucherError))
                 {
-                    return NotFound("Không tìm thấy đặt phòng");
+                    return BadRequest(voucherError);
                 }
             }
 
@@ -573,6 +550,87 @@ namespace KhachSanLuxury.KhachHang.Controllers
                    "&responseTime=" + MomoSafe(payload.ResponseTime) +
                    "&resultCode=" + MomoSafe(payload.ResultCode) +
                    "&transId=" + MomoSafe(payload.TransId);
+        }
+
+        private string? ApplyVoucherToBookingAndInvoice(int maDatPhong, string? maCode)
+        {
+            var datPhong = _context.Datphongs
+                .Include(x => x.Hoadons)
+                .FirstOrDefault(x => x.MaDatPhong == maDatPhong);
+            if (datPhong == null)
+            {
+                return "Không tìm thấy đặt phòng";
+            }
+
+            if (string.IsNullOrWhiteSpace(maCode))
+            {
+                return null;
+            }
+
+            var code = maCode.Trim().ToUpperInvariant();
+            var voucher = _context.Vouchers.FirstOrDefault(v => v.MaCode == code);
+            if (voucher == null || voucher.TrangThai == false)
+            {
+                return "Mã giảm giá không tồn tại hoặc đã bị khóa.";
+            }
+
+            if (voucher.NgayKetThuc.HasValue && voucher.NgayKetThuc.Value < DateTime.Now)
+            {
+                return "Mã giảm giá đã hết hạn sử dụng.";
+            }
+
+            if (voucher.SoLuongDaDung.HasValue && voucher.SoLuong.HasValue &&
+                voucher.SoLuongDaDung.Value >= voucher.SoLuong.Value &&
+                !string.Equals(datPhong.MaCode, code, StringComparison.OrdinalIgnoreCase))
+            {
+                return "Mã giảm giá đã hết lượt sử dụng.";
+            }
+
+            var tongTienGoc = datPhong.TongTienDuKien ?? 0;
+            if (voucher.GiaToiThieu.HasValue && tongTienGoc < voucher.GiaToiThieu.Value)
+            {
+                return "Chưa đạt đơn hàng tối thiểu để áp dụng mã giảm giá.";
+            }
+
+            decimal soTienGiam = 0;
+            if (voucher.PhanTramGiam.HasValue && voucher.PhanTramGiam.Value > 0)
+            {
+                soTienGiam = tongTienGoc * voucher.PhanTramGiam.Value / 100m;
+            }
+            else if (voucher.SoTienGiam.HasValue && voucher.SoTienGiam.Value > 0)
+            {
+                soTienGiam = voucher.SoTienGiam.Value;
+            }
+
+            if (soTienGiam > tongTienGoc)
+            {
+                soTienGiam = tongTienGoc;
+            }
+
+            var isSameCode = string.Equals(datPhong.MaCode, code, StringComparison.OrdinalIgnoreCase);
+            if (!isSameCode)
+            {
+                voucher.SoLuongDaDung = (voucher.SoLuongDaDung ?? 0) + 1;
+            }
+
+            datPhong.MaCode = voucher.MaCode;
+
+            var hoaDon = datPhong.Hoadons.OrderByDescending(h => h.NgayTao).FirstOrDefault();
+            if (hoaDon == null)
+            {
+                hoaDon = new Hoadon
+                {
+                    MaDatPhong = datPhong.MaDatPhong,
+                    NgayTao = DateTime.Now
+                };
+                _context.Hoadons.Add(hoaDon);
+            }
+
+            hoaDon.TongTienGoc = tongTienGoc;
+            hoaDon.SoTienGiam = soTienGiam;
+            hoaDon.TongTienPhaiTra = Math.Max(0, tongTienGoc - soTienGiam);
+
+            return null;
         }
     }
 
