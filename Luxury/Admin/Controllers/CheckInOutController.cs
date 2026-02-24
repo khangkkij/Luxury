@@ -69,9 +69,7 @@ namespace Luxury.Admin.Controllers
                 var chiTiet = x.Chitietdatphongs.FirstOrDefault();
 
                 // --- MỚI: Tính tổng tiền khách đã cọc/thanh toán trước ---
-                var daThanhToan = _context.Thanhtoans
-                    .Where(t => t.MaDatPhong == x.MaDatPhong && t.TrangThai == TrangThaiDaThanhToan)
-                    .Sum(t => t.SoTien) ?? 0;
+                var daThanhToan = CalculateEffectivePrepaid(x.MaDatPhong);
                 // --------------------------------------------------------
 
                 return new
@@ -162,15 +160,26 @@ namespace Luxury.Admin.Controllers
 
             if ((request.DepositAmount ?? 0) > 0 && !IsOnlineMethod(request.DepositMethod))
             {
-                var tamUng = new Thanhtoan
+                var tongDaDongTruoc = _context.Thanhtoans
+                    .Where(t => t.MaDatPhong == datPhong.MaDatPhong &&
+                                t.TrangThai == TrangThaiDaThanhToan &&
+                                t.MaHd == null &&
+                                t.LoaiThanhToan != "HoanTien")
+                    .Sum(t => t.SoTien ?? 0);
+
+                var soTienThuThem = Math.Max(0, (request.DepositAmount ?? 0) - tongDaDongTruoc);
+                if (soTienThuThem > 0)
                 {
-                    MaDatPhong = datPhong.MaDatPhong,
-                    LoaiThanhToan = LoaiTamUng,
-                    SoTien = request.DepositAmount,
-                    HinhThucThanhToan = request.DepositMethod ?? "cash",
-                    TrangThai = TrangThaiDaThanhToan
-                };
-                _context.Thanhtoans.Add(tamUng);
+                    var tamUng = new Thanhtoan
+                    {
+                        MaDatPhong = datPhong.MaDatPhong,
+                        LoaiThanhToan = LoaiTamUng,
+                        SoTien = soTienThuThem,
+                        HinhThucThanhToan = request.DepositMethod ?? "cash",
+                        TrangThai = TrangThaiDaThanhToan
+                    };
+                    _context.Thanhtoans.Add(tamUng);
+                }
             }
 
             _context.SaveChanges();
@@ -266,15 +275,26 @@ namespace Luxury.Admin.Controllers
 
             if ((request.DepositAmount ?? 0) > 0 && !IsOnlineMethod(request.DepositMethod))
             {
-                var tamUng = new Thanhtoan
+                var tongDaDongTruoc = _context.Thanhtoans
+                    .Where(t => t.MaDatPhong == datPhong.MaDatPhong &&
+                                t.TrangThai == TrangThaiDaThanhToan &&
+                                t.MaHd == null &&
+                                t.LoaiThanhToan != "HoanTien")
+                    .Sum(t => t.SoTien ?? 0);
+
+                var soTienThuThem = Math.Max(0, (request.DepositAmount ?? 0) - tongDaDongTruoc);
+                if (soTienThuThem > 0)
                 {
-                    MaDatPhong = datPhong.MaDatPhong,
-                    LoaiThanhToan = LoaiTamUng,
-                    SoTien = request.DepositAmount,
-                    HinhThucThanhToan = request.DepositMethod ?? "cash",
-                    TrangThai = TrangThaiDaThanhToan
-                };
-                _context.Thanhtoans.Add(tamUng);
+                    var tamUng = new Thanhtoan
+                    {
+                        MaDatPhong = datPhong.MaDatPhong,
+                        LoaiThanhToan = LoaiTamUng,
+                        SoTien = soTienThuThem,
+                        HinhThucThanhToan = request.DepositMethod ?? "cash",
+                        TrangThai = TrangThaiDaThanhToan
+                    };
+                    _context.Thanhtoans.Add(tamUng);
+                }
             }
 
             _context.SaveChanges();
@@ -366,11 +386,7 @@ namespace Luxury.Admin.Controllers
 
             // --- SỬA: Lấy tổng tiền đã thanh toán (bất kể là Cọc hay Thanh toán 100%) ---
             // Loại trừ khoản hoàn tiền cũ
-            var daThanhToan = _context.Thanhtoans
-                .Where(x => x.MaDatPhong == maDatPhong &&
-                            x.TrangThai == TrangThaiDaThanhToan &&
-                            x.LoaiThanhToan != "HoanTien")
-                .Sum(x => x.SoTien ?? 0);
+            var daThanhToan = CalculateEffectivePrepaid(maDatPhong);
             // -------------------------------------------------------------------------
 
             return Ok(new
@@ -449,7 +465,9 @@ namespace Luxury.Admin.Controllers
             var giaDat = chiTiet.GiaDat ?? 0;
             var ngayNhan = chiTiet.NgayNhan ?? DateTime.Now;
             var thoiGianTra = request.ThoiGianTraThucTe ?? DateTime.Now;
-            var soDem = Math.Max(1, (thoiGianTra.Date - ngayNhan.Date).Days);
+            // Đồng bộ với frontend: tiền phòng tính theo ngày trả dự kiến, giờ trả thực tế chỉ để tính phụ thu trễ.
+            var ngayTraTinhTien = chiTiet.NgayTra ?? thoiGianTra;
+            var soDem = Math.Max(1, (ngayTraTinhTien.Date - ngayNhan.Date).Days);
 
             var tienPhong = giaDat * soDem;
             var phuThuGio = thoiGianTra.TimeOfDay > new TimeSpan(12, 0, 0) ? Math.Round(giaDat * 0.3m) : 0;
@@ -462,11 +480,7 @@ namespace Luxury.Admin.Controllers
             var soTienGiam = ApplyVoucher(datPhong, request.VoucherCode, tongTienGoc, out var voucherMessage);
 
             // 3. Lấy TỔNG TIỀN KHÁCH ĐÃ ĐƯA (Cọc + TT trước)
-            var daThanhToan = _context.Thanhtoans
-                .Where(x => x.MaDatPhong == datPhong.MaDatPhong &&
-                            x.TrangThai == TrangThaiDaThanhToan &&
-                            x.LoaiThanhToan != "HoanTien")
-                .Sum(x => x.SoTien ?? 0);
+            var daThanhToan = CalculateEffectivePrepaid(datPhong.MaDatPhong);
 
             var suDungTienCoc = request.SuDungTienCoc ?? true;
             var tienDaDongApDung = suDungTienCoc ? daThanhToan : 0;
@@ -507,7 +521,7 @@ namespace Luxury.Admin.Controllers
             chiTiet.MaPhongNavigation.TrangThai = 3;
 
             // 4. Tạo thanh toán nếu còn thiếu
-            if (tongTienPhaiTra > 0)
+            if (tongTienPhaiTra > 0 && !IsOnlineMethod(request.HinhThucThanhToan))
             {
                 var thanhToan = new Thanhtoan
                 {
@@ -564,9 +578,15 @@ namespace Luxury.Admin.Controllers
                 return NotFound("Không tìm thấy đặt phòng");
             }
 
+            var hoaDon = _context.Hoadons
+                .Where(x => x.MaDatPhong == request.MaDatPhong)
+                .OrderByDescending(x => x.NgayTao)
+                .FirstOrDefault();
+
             var thanhToan = new Thanhtoan
             {
                 MaDatPhong = request.MaDatPhong,
+                MaHd = hoaDon?.MaHd,
                 LoaiThanhToan = LoaiThanhToan,
                 SoTien = request.SoTien,
                 HinhThucThanhToan = request.HinhThucThanhToan,
@@ -759,6 +779,39 @@ namespace Luxury.Admin.Controllers
             }
 
             return datPhong.Chitietdatphongs.FirstOrDefault(ct => ct.TrangThai == true);
+        }
+
+        private decimal CalculateEffectivePrepaid(int? maDatPhong)
+        {
+            if (maDatPhong == null || maDatPhong <= 0)
+            {
+                return 0;
+            }
+
+            var prepaids = _context.Thanhtoans
+                .Where(x => x.MaDatPhong == maDatPhong &&
+                            x.TrangThai == TrangThaiDaThanhToan &&
+                            x.LoaiThanhToan != "HoanTien" &&
+                            x.MaHd == null)
+                .Select(x => new
+                {
+                    Loai = (x.LoaiThanhToan ?? string.Empty).Trim(),
+                    SoTien = x.SoTien ?? 0
+                })
+                .ToList();
+
+            if (prepaids.Count == 2)
+            {
+                var datCoc = prepaids.FirstOrDefault(x => string.Equals(x.Loai, "DatCoc", StringComparison.OrdinalIgnoreCase));
+                var tamUng = prepaids.FirstOrDefault(x => string.Equals(x.Loai, LoaiTamUng, StringComparison.OrdinalIgnoreCase));
+                if (datCoc != null && tamUng != null && datCoc.SoTien == tamUng.SoTien)
+                {
+                    // Dữ liệu cũ bị nhân đôi cọc ở bước check-in: chỉ tính 1 lần.
+                    return datCoc.SoTien;
+                }
+            }
+
+            return prepaids.Sum(x => x.SoTien);
         }
 
         private decimal ApplyVoucher(Datphong datPhong, string? voucherCode, decimal tongTienGoc, out string? message)
