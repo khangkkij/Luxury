@@ -34,20 +34,17 @@ namespace Luxury.KhachHang.Controllers
         [HttpPost("login")]
         public IActionResult Login([FromBody] LoginRequest model)
         {
-            // 1. Kiểm tra đầu vào
             if (string.IsNullOrEmpty(model.Email) || string.IsNullOrEmpty(model.MatKhau))
                 return BadRequest("Chưa nhập tài khoản hoặc mật khẩu");
-
-            // 2. Tìm người dùng
             var user = _context.Khachhangs.FirstOrDefault(u => u.Email == model.Email && u.MatKhau == model.MatKhau);
 
             if (user == null) return Unauthorized("Sai thông tin đăng nhập");
             if (user.TrangThai == false) return StatusCode(403, "Tài khoản bị khóa");
 
-            // TẠO ACCESS TOKEN (JWT) - Sống ngắn (30 phút)
+            // ACCESS TOKEN  ngắn (30 phút)
             var accessToken = GenerateJwtToken(user);
 
-            // TẠO REFRESH TOKEN - Sống dài ( 7 ngày)
+            // REFRESH TOKEN dài ( 7 ngày)
             var refreshToken = GenerateRefreshTokenString();
 
             // LƯU REFRESH TOKEN VÀO DATABASE (Bảng Refeshtoken)
@@ -134,6 +131,43 @@ namespace Luxury.KhachHang.Controllers
                 SameSite = SameSiteMode.None // Để Vue gọi được API
             };
             Response.Cookies.Append(name, value, cookieOptions);
+        }
+        [HttpPost("check-session")]
+        public IActionResult CheckSession()
+        {
+            // 1. Lấy Refresh Token từ Cookie an toàn
+            var refreshToken = Request.Cookies["RefreshToken"];
+
+            if (string.IsNullOrEmpty(refreshToken))
+            {
+                return Unauthorized(new { message = "Không tìm thấy phiên đăng nhập." });
+            }
+
+            // 2. Tìm token trong Database
+            var tokenInDb = _context.Refeshtokens.FirstOrDefault(rt => rt.Token == refreshToken);
+
+            //  Nếu Thời gian kết thúc (ExpiredAt) nhỏ hơn thời gian hiện tại (UtcNow)
+            if (tokenInDb == null || tokenInDb.ExpiredAt < DateTime.UtcNow)
+            {
+                // Xóa token lỗi/hết hạn khỏi DB
+                if (tokenInDb != null)
+                {
+                    _context.Refeshtokens.Remove(tokenInDb);
+                    _context.SaveChanges();
+                }
+
+                // Xóa Cookie ở trình duyệt để đảm bảo sạch sẽ
+                Response.Cookies.Delete("RefreshToken");
+
+                // Trả về 401 Unauthorized để báo cho Vue biết là phải Log out
+                return Unauthorized(new { message = "Phiên đăng nhập đã hết hạn tự động." });
+            }
+
+            // 4. Nếu vẫn còn hạn, cấp Access Token mới để dùng tiếp (Refresh thành công)
+            var user = _context.Khachhangs.Find(tokenInDb.UserId);
+            var newAccessToken = GenerateJwtToken(user);
+
+            return Ok(new { token = newAccessToken });
         }
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterRequest model)
