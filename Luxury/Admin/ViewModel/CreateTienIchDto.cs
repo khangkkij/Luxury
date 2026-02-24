@@ -6,7 +6,7 @@
 
         public string? LoaiTienIch { get; set; }
 
-        public IFormFile? Icon { get; set; }
+        public string? Icon { get; set; }
 
         public bool? TrangThai { get; set; }
     }

@@ -44,27 +44,27 @@ namespace Luxury.Admin.Controllers
         [HttpPost]
         public async Task<IActionResult> Create([FromForm] CreateTienIchDto dto)
         {
-            string? iconPath = null;
-            var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "IconTienIch");
+            //string? iconPath = null;
+            //var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "IconTienIch");
 
-            if (!Directory.Exists(uploadPath))
-                Directory.CreateDirectory(uploadPath);
-            if (dto.Icon != null)
-            {
-                var fileName = $"{Guid.NewGuid()}{Path.GetExtension(dto.Icon.FileName)}";
-                var filePath = Path.Combine(uploadPath, fileName);
+            //if (!Directory.Exists(uploadPath))
+            //    Directory.CreateDirectory(uploadPath);
+            //if (dto.Icon != null)
+            //{
+            //    var fileName = $"{Guid.NewGuid()}{Path.GetExtension(dto.Icon.FileName)}";
+            //    var filePath = Path.Combine(uploadPath, fileName);
 
-                using var stream = new FileStream(filePath, FileMode.Create);
-                await dto.Icon.CopyToAsync(stream);
+            //    using var stream = new FileStream(filePath, FileMode.Create);
+            //    await dto.Icon.CopyToAsync(stream);
 
-                iconPath = $"uploads/IconTienIch/{fileName}";
-            }
+            //    iconPath = $"uploads/IconTienIch/{fileName}";
+            //}
             var tienIch = new Tienich
             {
                 TenTienIch = dto.TenTienIch,
                 LoaiTienIch = dto.LoaiTienIch,
                 TrangThai = dto.TrangThai,
-                Icon = iconPath
+                Icon = dto.Icon
             };
             _context.Tieniches.Add(tienIch);
             await _context.SaveChangesAsync();
@@ -78,21 +78,22 @@ namespace Luxury.Admin.Controllers
             tienIch.TenTienIch = dto.TenTienIch;
             tienIch.LoaiTienIch = dto.LoaiTienIch;
             tienIch.TrangThai = dto.TrangThai;
-            var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "IconTienIch");
-            if (!Directory.Exists(uploadPath)) Directory.CreateDirectory(uploadPath);
-            if (dto.Icon != null)
-            {
-                if (!string.IsNullOrEmpty(tienIch.Icon))
-                {
-                    var oldFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", tienIch.Icon);
-                    if (System.IO.File.Exists(oldFilePath)) System.IO.File.Delete(oldFilePath);
-                }
-                var fileName = $"{Guid.NewGuid()}{Path.GetExtension(tienIch.Icon)}";
-                var filePath = Path.Combine(uploadPath, fileName);
-                using var stream = new FileStream(filePath, FileMode.Create);
-                await dto.Icon.CopyToAsync(stream);
-                tienIch.Icon = $"uploads/IconTienIch/{fileName}";
-            }
+            //var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "IconTienIch");
+            //if (!Directory.Exists(uploadPath)) Directory.CreateDirectory(uploadPath);
+            //if (dto.Icon != null)
+            //{
+            //    if (!string.IsNullOrEmpty(tienIch.Icon))
+            //    {
+            //        var oldFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", tienIch.Icon);
+            //        if (System.IO.File.Exists(oldFilePath)) System.IO.File.Delete(oldFilePath);
+            //    }
+            //    var fileName = $"{Guid.NewGuid()}{Path.GetExtension(tienIch.Icon)}";
+            //    var filePath = Path.Combine(uploadPath, fileName);
+            //    using var stream = new FileStream(filePath, FileMode.Create);
+            //    await dto.Icon.CopyToAsync(stream);
+            //    tienIch.Icon = $"uploads/IconTienIch/{fileName}";
+            //}
+            tienIch.Icon = dto.Icon;
             await _context.SaveChangesAsync();
             return Ok(tienIch);
         }
