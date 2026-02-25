@@ -13,7 +13,7 @@ namespace KhachSanLuxury.KhachHang.Controllers
     {
         private readonly LuxuryHotelContext _context;
 
-        private const string TrangThaiChoXacNhan = "Chonhanphong";
+        private const string TrangThaiChoXacNhan = "ChoXacNhan";
 
         public DatPhongController(LuxuryHotelContext context)
         {
@@ -100,6 +100,8 @@ namespace KhachSanLuxury.KhachHang.Controllers
 
             var tongTien = items.Sum(x => x.GiaDat * soDem * x.SoLuong);
 
+            // ... (đoạn code kiểm tra số lượng phòng trống giữ nguyên)
+
             var maKh = request.MaKh ?? GetMaKhFromCookie();
             if (maKh == null || maKh <= 0)
             {
@@ -118,16 +120,31 @@ namespace KhachSanLuxury.KhachHang.Controllers
             _context.Datphongs.Add(datPhong);
             _context.SaveChanges();
 
-            var daGanSoNguoi = false;
             foreach (var item in items)
             {
-                for (var i = 0; i < item.SoLuong; i++)
+                // 1. Tìm danh sách các phòng còn trống (TrangThai == 1) 
+                // Lấy đúng số lượng (Take) mà khách đã đặt
+                var danhSachPhongTrong = _context.Phongs
+                    .Where(p => p.MaBienThePhong == item.MaBienThePhong && p.TrangThai == 1)
+                    .Take(item.SoLuong)
+                    .ToList();
+
+                if (danhSachPhongTrong.Count < item.SoLuong)
                 {
+                    return BadRequest($"Phòng thuộc biến thể {item.MaBienThePhong} vừa mới hết.");
+                }
+
+                var daGanSoNguoi = false;
+                foreach (var phong in danhSachPhongTrong)
+                {
+                    // 2. Cập nhật trạng thái phòng thành 0 (Đã được đặt) để trừ số lượng phòng trống
+                    phong.TrangThai = 0;
+
                     var ganSoNguoi = !daGanSoNguoi;
                     var chiTiet = new Chitietdatphong
                     {
                         MaDatPhong = datPhong.MaDatPhong,
-                        MaPhong = null,
+                        MaPhong = phong.MaPhong, // 3. Gán mã phòng cụ thể đã giữ chỗ
                         GiaDat = item.GiaDat,
                         NgayNhan = request.NgayNhan,
                         NgayTra = request.NgayTra,
@@ -135,17 +152,15 @@ namespace KhachSanLuxury.KhachHang.Controllers
                         SoTreEm = ganSoNguoi ? request.SoTreEm : null,
                         TrangThai = true
                     };
-                    if (ganSoNguoi)
-                    {
-                        daGanSoNguoi = true;
-                    }
 
-                    // Chỉ trừ phòng sau khi thanh toán thành công
+                    if (ganSoNguoi) daGanSoNguoi = true;
+
                     _context.Chitietdatphongs.Add(chiTiet);
                 }
             }
-            _context.SaveChanges();
 
+            // 4. Lưu tất cả thay đổi (bao gồm cập nhật TrangThai phòng và thêm chi tiết đặt phòng)
+            _context.SaveChanges();
             return Ok(new
             {
                 maDatPhong = datPhong.MaDatPhong,
@@ -374,5 +389,6 @@ namespace KhachSanLuxury.KhachHang.Controllers
                 tongTienPhaiTra = hoaDon?.TongTienPhaiTra ?? datPhong.TongTienDuKien ?? 0
             });
         }
+
     }
 }
