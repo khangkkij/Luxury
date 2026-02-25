@@ -18,6 +18,34 @@ namespace Luxury.Admin.Controllers
         {
             _context = context;
         }
+        private (decimal Gia, int? MaThietLap) TinhGiaHienTai(LoaiphongBienthe x)
+        {
+            var today = DateTime.Today;
+
+            var giaLe = x.Thietlapgia
+                .FirstOrDefault(g =>
+                    g.LoaiGia == "Lễ" &&
+                    g.NgayBatDau <= today &&
+                    g.NgayKetThuc >= today);
+
+            if (giaLe != null)
+                return (giaLe.Gia ?? 0, giaLe.MaThietLap);
+
+            if (today.DayOfWeek == DayOfWeek.Saturday ||
+                today.DayOfWeek == DayOfWeek.Sunday)
+            {
+                var giaCuoiTuan = x.Thietlapgia
+                    .FirstOrDefault(g => g.LoaiGia == "Cuối tuần");
+
+                if (giaCuoiTuan != null)
+                    return (giaCuoiTuan.Gia ?? 0, giaCuoiTuan.MaThietLap);
+            }
+
+            var giaThuong = x.Thietlapgia
+                .FirstOrDefault(g => g.LoaiGia == "Giá ngày thường");
+
+            return (giaThuong?.Gia ?? 0, giaThuong?.MaThietLap);
+        }
         [HttpGet]
         public IActionResult GetAll([FromQuery] string? keyword, [FromQuery] int? loaiPhongId, [FromQuery] int? maLp, [FromQuery] int page = 1, [FromQuery] int pageSize = 9)
         {
@@ -78,16 +106,24 @@ namespace Luxury.Admin.Controllers
             }
             int totalItems = query.Count();
             int totalPages = (int)Math.Ceiling(totalItems / (double)pageSize);
-
-            var data = query
+            var list = query
                 .OrderByDescending(x => x.MaBienThePhong)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .Select(x => new
+                .ToList(); // load về trước
+            var data = list.Select(x =>
+            {
+                var giaInfo = TinhGiaHienTai(x);
+
+                return new
                 {
                     x.MaBienThePhong,
                     x.TenBienThe,
-                    AnhDaiDien=_context.Hinhanhs.Where(a=>a.MaBienThePhong==x.MaBienThePhong).Select(a=>a.DuongDan).FirstOrDefault(),
+
+                    AnhDaiDien = x.Hinhanhs
+                        .Select(a => a.DuongDan)
+                        .FirstOrDefault(),
+
                     dsAnh = x.Hinhanhs
                         .Select(h => h.DuongDan)
                         .ToList(),
@@ -99,22 +135,13 @@ namespace Luxury.Admin.Controllers
 
                     TenLoai = x.MaLpNavigation.TenLoai,
 
-                    GiaGoc = x.Thietlapgia
-                        .Where(g => g.MacDinh == true)
-                        .Select(g => g.Gia)
-                        .FirstOrDefault(),
-
-                    GiaBienDong = x.Thietlapgia
-                        .Where(g => g.MacDinh == false)
-                        .Select(g => g.Gia)
-                        .FirstOrDefault(),
+                    GiaHienTai = giaInfo.Gia,          // 👈 decimal
+                    MaGiaDangDung = giaInfo.MaThietLap, // 👈 id
 
                     x.HuongNhin,
 
-                    SoPhongCon = _context.Phongs.Count(p =>
-                        p.MaBienThePhong == x.MaBienThePhong &&
-                        p.TrangThai == 1
-                    ),
+                    SoPhongCon = x.Phongs.Count(p => p.TrangThai == 1),
+
                     TienIch = x.TienichLoaiphongs
                         .Select(tlp => new
                         {
@@ -129,7 +156,8 @@ namespace Luxury.Admin.Controllers
                         p.SoPhong,
                         p.TrangThai
                     }).ToList(),
-                }).ToList();
+                };
+            }).ToList();
 
             return Ok(new
             {
@@ -188,6 +216,13 @@ namespace Luxury.Admin.Controllers
                 Gia = dto.GiaNiemYet,
                 MacDinh = true,
                 LoaiGia = "Giá ngày thường"
+            });
+            _context.Thietlapgia.Add(new Thietlapgium
+            {
+                MaBienThePhong = bienThe.MaBienThePhong,
+                Gia = dto.GiaCuoiTuan,
+                MacDinh = false,
+                LoaiGia = "Cuối tuần"
             });
             if (dto.PriceRanges != null && dto.PriceRanges.Any())
             {
@@ -348,8 +383,15 @@ namespace Luxury.Admin.Controllers
 
             if (bienThe == null)
                 return NotFound("Không tìm thấy biến thể");
+            var giaApDung = TinhGiaHienTai(bienThe);
 
-            var dto = new CreateBienTheDto
+            var giaThuong = bienThe.Thietlapgia
+                .FirstOrDefault(x => x.LoaiGia == "Giá ngày thường");
+
+            var giaCuoiTuan = bienThe.Thietlapgia
+                .FirstOrDefault(x => x.LoaiGia == "Cuối tuần");
+
+            var dto = new
             {
                 MaLp = bienThe.MaLp ?? 0,
                 TenBienThe = bienThe.TenBienThe,
@@ -359,23 +401,31 @@ namespace Luxury.Admin.Controllers
                 SoTreEm = bienThe.SoTreEm ?? 0,
                 DienTich = bienThe.DienTich ?? 0,
 
-                GiaNiemYet = bienThe.Thietlapgia
-                    .FirstOrDefault(x => x.MacDinh==true)?.Gia ?? 0,
+                // 🔥 Giá thường
+                GiaNiemYet = giaThuong?.Gia ?? 0,
+
+                // 🔥 Giá cuối tuần
+                GiaCuoiTuan = giaCuoiTuan?.Gia ?? 0,
+
+                // 🔥 Giá đang áp dụng hôm nay
+                GiaHienTai = giaApDung.Gia,
+                GiaDangApDungId = giaApDung.MaThietLap,
 
                 TienIchIds = bienThe.TienichLoaiphongs
                     .Select(x => x.MaTi)
                     .ToList(),
 
+                // 🔥 Chỉ lấy giá lễ vào PriceRanges
                 PriceRanges = bienThe.Thietlapgia
-                    .Where(x => x.MacDinh != true&&x.LoaiGia != "Giá ngày thường")
-                    .Select(x => new PriceRangeDto
+                    .Where(x => x.LoaiGia == "Lễ")
+                    .Select(x => new
                     {
                         MaThietLapGia = x.MaThietLap,
                         MaBienThePhong = x.MaBienThePhong ?? 0,
                         LoaiGia = x.LoaiGia,
                         MoTa = x.MoTa,
-                        NgayBatDau = x.NgayBatDau ?? DateTime.MinValue,
-                        NgayKetThuc = x.NgayKetThuc ?? DateTime.MinValue,
+                        NgayBatDau = x.NgayBatDau,
+                        NgayKetThuc = x.NgayKetThuc,
                         Gia = x.Gia ?? 0,
                         MacDinh = x.MacDinh ?? false
                     })
@@ -385,6 +435,7 @@ namespace Luxury.Admin.Controllers
                     .Select(x => $"{Request.Scheme}://{Request.Host}/{x.DuongDan}")
                     .ToList()
             };
+
             return Ok(dto);
         }
         [HttpPut("{id}")]
@@ -420,67 +471,106 @@ namespace Luxury.Admin.Controllers
                 bienThe.DienTich = dto.DienTich;
 
                 // 2. Update giá mặc định
+                // Lấy tất cả giá hiện có
                 var existingPrices = await _context.Thietlapgia
                     .Where(g => g.MaBienThePhong == id)
                     .ToListAsync();
 
-                foreach (var dtoPrice in dto.PriceRanges)
+
+                // =========================
+                // 1️⃣ Update giá ngày thường
+                // =========================
+                var giaThuong = existingPrices
+                    .FirstOrDefault(x => x.LoaiGia == "Giá ngày thường");
+
+                if (giaThuong != null)
                 {
-                    if (dtoPrice.MacDinh)
-                    {
-                        var sameLoaiGia = existingPrices
-                            .Where(x =>
-                                x.MaThietLap != dtoPrice.MaThietLapGia &&
-                                x.LoaiGia == dtoPrice.LoaiGia
-                            );
-
-                        foreach (var item in sameLoaiGia)
-                            item.MacDinh = false;
-                    }
-                    if (dtoPrice.MaThietLapGia != 0)
-                    {
-                        var existing = existingPrices
-                            .FirstOrDefault(x => x.MaThietLap == dtoPrice.MaThietLapGia);
-                        if (existing != null)
-                        {
-                            existing.Gia = dtoPrice.Gia;
-                            existing.MoTa = dtoPrice.MoTa;
-                            existing.LoaiGia = dtoPrice.LoaiGia;
-                            existing.NgayBatDau = dtoPrice.NgayBatDau;
-                            existing.NgayKetThuc = dtoPrice.NgayKetThuc;
-                            existing.MacDinh = dtoPrice.MacDinh;
-                        }
-                    }
-                    else
-                    {
-                        var newPrice = new Thietlapgium
-                        {
-                            MaBienThePhong = id,
-                            Gia = dtoPrice.Gia,
-                            MacDinh = dtoPrice.MacDinh,
-                            LoaiGia = dtoPrice.LoaiGia,
-                            MoTa = dtoPrice.MoTa,
-                            NgayBatDau = dtoPrice.NgayBatDau,
-                            NgayKetThuc = dtoPrice.NgayKetThuc
-                        };
-
-                        _context.Thietlapgia.Add(newPrice);
-                        existingPrices.Add(newPrice);
-                    }
+                    giaThuong.Gia = dto.GiaNiemYet;
                 }
-                var giaMacDinh = await _context.Thietlapgia
-                    .FirstOrDefaultAsync(g => g.MaBienThePhong == id && g.MacDinh==true);
-
-                if (giaMacDinh != null)
-                    giaMacDinh.Gia = dto.GiaNiemYet;
                 else
+                {
                     _context.Thietlapgia.Add(new Thietlapgium
                     {
                         MaBienThePhong = id,
                         Gia = dto.GiaNiemYet,
-                        MacDinh = true
+                        LoaiGia = "Giá ngày thường"
                     });
+                }
 
+
+                // =========================
+                // 2️⃣ Update giá cuối tuần
+                // =========================
+                var giaCuoiTuan = existingPrices
+                    .FirstOrDefault(x => x.LoaiGia == "Cuối tuần");
+
+                if (giaCuoiTuan != null)
+                {
+                    giaCuoiTuan.Gia = dto.GiaCuoiTuan;
+                }
+                else
+                {
+                    _context.Thietlapgia.Add(new Thietlapgium
+                    {
+                        MaBienThePhong = id,
+                        Gia = dto.GiaCuoiTuan,
+                        LoaiGia = "Cuối tuần"
+                    });
+                }
+
+
+                // =========================
+                // 3️⃣ Xử lý giá lễ
+                // =========================
+
+                // Lấy toàn bộ giá lễ trong DB
+                var existingLe = existingPrices
+                    .Where(x => x.LoaiGia == "Lễ")
+                    .ToList();
+
+                // Id lễ từ DTO
+                var dtoLeIds = dto.PriceRanges
+                    .Where(x => x.MaThietLapGia != 0)
+                    .Select(x => x.MaThietLapGia)
+                    .ToList();
+
+                // Xóa lễ bị user xóa
+                var leToRemove = existingLe
+                    .Where(x => !dtoLeIds.Contains(x.MaThietLap))
+                    .ToList();
+
+                _context.Thietlapgia.RemoveRange(leToRemove);
+
+
+                // Update hoặc thêm lễ
+                foreach (var dtoLe in dto.PriceRanges)
+                {
+                    if (dtoLe.MaThietLapGia != 0)
+                    {
+                        var existing = existingLe
+                            .FirstOrDefault(x => x.MaThietLap == dtoLe.MaThietLapGia);
+
+                        if (existing != null)
+                        {
+                            existing.Gia = dtoLe.Gia;
+                            existing.MoTa = dtoLe.MoTa;
+                            existing.NgayBatDau = dtoLe.NgayBatDau;
+                            existing.NgayKetThuc = dtoLe.NgayKetThuc;
+                        }
+                    }
+                    else
+                    {
+                        _context.Thietlapgia.Add(new Thietlapgium
+                        {
+                            MaBienThePhong = id,
+                            Gia = dtoLe.Gia,
+                            LoaiGia = "Lễ",
+                            MoTa = dtoLe.MoTa,
+                            NgayBatDau = dtoLe.NgayBatDau,
+                            NgayKetThuc = dtoLe.NgayKetThuc
+                        });
+                    }
+                }
                 // 3. Update tiện ích
                 var oldTienIch = _context.TienichLoaiphongs
                     .Where(t => t.MaBienThePhong == id);
