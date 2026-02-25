@@ -483,11 +483,22 @@ namespace Luxury.Admin.Controllers
             var daThanhToan = CalculateEffectivePrepaid(datPhong.MaDatPhong);
 
             var suDungTienCoc = request.SuDungTienCoc ?? true;
-            var tienDaDongApDung = suDungTienCoc ? daThanhToan : 0;
+
+            // Chỉ cho phép cọc/tiền đã thanh toán trước trừ TỐI ĐA bằng tiền phòng.
+            // Phần dịch vụ & phụ thu sẽ luôn phải thanh toán riêng.
+            // ĐOẠN MỚI: Trừ thẳng vào tổng hóa đơn
+            decimal tienDaDongApDung = 0;
+            if (suDungTienCoc && daThanhToan > 0)
+            {
+                tienDaDongApDung = daThanhToan; // Lấy toàn bộ số tiền khách đã đóng
+            }
+
+            // Tổng hóa đơn (gồm phòng + DV + phụ thu) - (Giảm giá + Toàn bộ tiền đã đóng)
+            var tongTienPhaiTra = tongTienGoc - soTienGiam - tienDaDongApDung;
 
             // 4. PHÉP TÍNH QUAN TRỌNG NHẤT:
-            // Lấy Tổng Hóa Đơn - Tổng Đã Đưa
-            var tongTienPhaiTra = tongTienGoc - soTienGiam - tienDaDongApDung;
+            // Lấy Tổng Hóa Đơn - (Giảm giá + Phần tiền cọc được phép trừ)
+            
 
             // 5. Nếu kết quả ÂM (tức là khách đưa thừa tiền), thì chốt là 0 đồng (Không hoàn tiền)
             // Còn nếu DƯƠNG (tức là còn thiếu 70% tiền phòng hoặc thiếu tiền dịch vụ) thì giữ nguyên để thu.
