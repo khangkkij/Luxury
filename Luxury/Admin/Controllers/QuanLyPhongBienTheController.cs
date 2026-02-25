@@ -186,8 +186,25 @@ namespace Luxury.Admin.Controllers
             {
                 MaBienThePhong = bienThe.MaBienThePhong,
                 Gia = dto.GiaNiemYet,
-                MacDinh = true
+                MacDinh = true,
+                LoaiGia = "Giá ngày thường"
             });
+            if (dto.PriceRanges != null && dto.PriceRanges.Any())
+            {
+                foreach (var p in dto.PriceRanges)
+                {
+                    _context.Thietlapgia.Add(new Thietlapgium
+                    {
+                        MaBienThePhong = bienThe.MaBienThePhong,
+                        Gia = p.Gia,
+                        MacDinh = false,
+                        LoaiGia = p.LoaiGia,
+                        MoTa = p.MoTa,
+                        NgayBatDau = p.NgayBatDau,
+                        NgayKetThuc = p.NgayKetThuc
+                    });
+                }
+            }
 
             // 3. Lưu tiện ích (N-N)
             foreach (var ti in dto.TienIchIds)
@@ -349,6 +366,21 @@ namespace Luxury.Admin.Controllers
                     .Select(x => x.MaTi)
                     .ToList(),
 
+                PriceRanges = bienThe.Thietlapgia
+                    .Where(x => x.MacDinh != true&&x.LoaiGia != "Giá ngày thường")
+                    .Select(x => new PriceRangeDto
+                    {
+                        MaThietLapGia = x.MaThietLap,
+                        MaBienThePhong = x.MaBienThePhong ?? 0,
+                        LoaiGia = x.LoaiGia,
+                        MoTa = x.MoTa,
+                        NgayBatDau = x.NgayBatDau ?? DateTime.MinValue,
+                        NgayKetThuc = x.NgayKetThuc ?? DateTime.MinValue,
+                        Gia = x.Gia ?? 0,
+                        MacDinh = x.MacDinh ?? false
+                    })
+                    .ToList(),
+
                 ImageUrls = bienThe.Hinhanhs
                     .Select(x => $"{Request.Scheme}://{Request.Host}/{x.DuongDan}")
                     .ToList()
@@ -388,6 +420,54 @@ namespace Luxury.Admin.Controllers
                 bienThe.DienTich = dto.DienTich;
 
                 // 2. Update giá mặc định
+                var existingPrices = await _context.Thietlapgia
+                    .Where(g => g.MaBienThePhong == id)
+                    .ToListAsync();
+
+                foreach (var dtoPrice in dto.PriceRanges)
+                {
+                    if (dtoPrice.MacDinh)
+                    {
+                        var sameLoaiGia = existingPrices
+                            .Where(x =>
+                                x.MaThietLap != dtoPrice.MaThietLapGia &&
+                                x.LoaiGia == dtoPrice.LoaiGia
+                            );
+
+                        foreach (var item in sameLoaiGia)
+                            item.MacDinh = false;
+                    }
+                    if (dtoPrice.MaThietLapGia != 0)
+                    {
+                        var existing = existingPrices
+                            .FirstOrDefault(x => x.MaThietLap == dtoPrice.MaThietLapGia);
+                        if (existing != null)
+                        {
+                            existing.Gia = dtoPrice.Gia;
+                            existing.MoTa = dtoPrice.MoTa;
+                            existing.LoaiGia = dtoPrice.LoaiGia;
+                            existing.NgayBatDau = dtoPrice.NgayBatDau;
+                            existing.NgayKetThuc = dtoPrice.NgayKetThuc;
+                            existing.MacDinh = dtoPrice.MacDinh;
+                        }
+                    }
+                    else
+                    {
+                        var newPrice = new Thietlapgium
+                        {
+                            MaBienThePhong = id,
+                            Gia = dtoPrice.Gia,
+                            MacDinh = dtoPrice.MacDinh,
+                            LoaiGia = dtoPrice.LoaiGia,
+                            MoTa = dtoPrice.MoTa,
+                            NgayBatDau = dtoPrice.NgayBatDau,
+                            NgayKetThuc = dtoPrice.NgayKetThuc
+                        };
+
+                        _context.Thietlapgia.Add(newPrice);
+                        existingPrices.Add(newPrice);
+                    }
+                }
                 var giaMacDinh = await _context.Thietlapgia
                     .FirstOrDefaultAsync(g => g.MaBienThePhong == id && g.MacDinh==true);
 

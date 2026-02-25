@@ -14,7 +14,6 @@
         public List<int> TienIchIds { get; set; } = new();
         public List<IFormFile> Images { get; set; } = new();
         public List<string>? ImageUrls { get; set; }
+        public List<PriceRangeDto> PriceRanges { get; set; }
     }
-
-
 }
