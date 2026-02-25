@@ -14,11 +14,48 @@ namespace KhachSanLuxury.KhachHang.Controllers
         {
             _context = context;
         }
+        private decimal TinhGiaHienTai(LoaiphongBienthe bt)
+        {
+            var today = DateTime.Now;
+
+            // 1️⃣ Ưu tiên giá lễ
+            var giaLe = bt.Thietlapgia
+                .FirstOrDefault(g =>
+                    g.LoaiGia == "Lễ" &&
+                    g.NgayBatDau <= today &&
+                    g.NgayKetThuc >= today);
+
+            if (giaLe != null)
+                return giaLe.Gia ?? 0;
+
+            // 2️⃣ Nếu là cuối tuần
+            if (today.DayOfWeek == DayOfWeek.Saturday ||
+                today.DayOfWeek == DayOfWeek.Sunday)
+            {
+                var giaCuoiTuan = bt.Thietlapgia
+                    .FirstOrDefault(g => g.LoaiGia == "Cuối tuần");
+
+                if (giaCuoiTuan != null)
+                    return giaCuoiTuan.Gia ?? 0;
+            }
+
+            // 3️⃣ Mặc định lấy giá ngày thường
+            var giaThuong = bt.Thietlapgia
+                .FirstOrDefault(g => g.LoaiGia == "Giá ngày thường");
+
+            return giaThuong?.Gia ?? 0;
+        }
         [HttpGet]
         public IActionResult GetAll()
         {
-            var ds = _context.LoaiphongBienthes.Include(x => x.MaLpNavigation).Include(x => x.Phongs).Include(x => x.Hinhanhs).Include(x => x.Thietlapgia)
-                .Include(x => x.ChitietFlashsales).ThenInclude(x => x.Flashsale)
+            var ds = _context.LoaiphongBienthes
+                .Include(x => x.MaLpNavigation)
+                .Include(x => x.Phongs)
+                .Include(x => x.Hinhanhs)
+                .Include(x => x.Thietlapgia)
+                .Include(x => x.ChitietFlashsales)
+                    .ThenInclude(x => x.Flashsale)
+                .AsEnumerable() // ⚠ bắt buộc
                 .Select(x => new
                 {
                     x.MaBienThePhong,
@@ -29,7 +66,8 @@ namespace KhachSanLuxury.KhachHang.Controllers
                     x.SoTreEm,
                     x.DienTich,
                     x.HuongNhin,
-                    GiaGoc = x.Thietlapgia.Where(g => g.MacDinh == true).Select(g => g.Gia).FirstOrDefault(),
+                    GiaGoc = TinhGiaHienTai(x),
+
                     PhanTramGiam = x.ChitietFlashsales
                         .Where(fs =>
                             fs.Flashsale.TrangThai == true &&
@@ -38,11 +76,24 @@ namespace KhachSanLuxury.KhachHang.Controllers
                         )
                         .Select(fs => fs.PhanTramGiam)
                         .FirstOrDefault(),
+
                     SoPhongCon = x.Phongs.Count(p => p.TrangThai == 1),
-                    AnhDaiDien = x.Hinhanhs.Select(h => h.DuongDan).FirstOrDefault()
-                });
+
+                    AnhDaiDien = x.Hinhanhs
+                        .Select(h => h.DuongDan)
+                        .FirstOrDefault()
+                })
+                .ToList();
             var today = DateTime.Now;
             var dsLoaiPhong = _context.Loaiphongs
+                .Include(lp => lp.LoaiphongBienthes)
+                    .ThenInclude(bt => bt.Thietlapgia)
+                .Include(lp => lp.LoaiphongBienthes)
+                    .ThenInclude(bt => bt.Hinhanhs)
+                .Include(lp => lp.LoaiphongBienthes)
+                    .ThenInclude(bt => bt.Phongs)
+                        .ThenInclude(p => p.Danhgia)
+                .AsEnumerable() // ⚠ Bắt buộc vì dùng method custom
                 .Select(lp => new
                 {
                     lp.MaLp,
@@ -55,25 +106,20 @@ namespace KhachSanLuxury.KhachHang.Controllers
                         bt.TenBienThe,
                         bt.DienTich,
                         bt.HuongNhin,
-                    Gia = bt.Thietlapgia
-                            .Where(g => g.LoaiGia == "Giá ngày thường" || ((g.LoaiGia == "Lễ" || g.LoaiGia == "Cuối tuần")
-                                    && g.NgayBatDau <= today
-                                    && g.NgayKetThuc >= today
-                                )
-                            )
-                            .OrderBy(g =>
-                                g.LoaiGia == "Lễ" ? 1 :
-                                g.LoaiGia == "Cuối tuần" ? 2 :
-                                3)
-                    .Select(g => g.Gia)
-                    .FirstOrDefault(),
-                        HinhAnhs = bt.Hinhanhs.Select(h => h.DuongDan).FirstOrDefault(),
+
+                        Gia = TinhGiaHienTai(bt),
+
+                        HinhAnhs = bt.Hinhanhs
+                            .Select(h => h.DuongDan)
+                            .FirstOrDefault(),
+
                         SoLuongDanhGia = bt.Phongs
-                                            .SelectMany(p => p.Danhgia)
-                                            .Count(),
+                            .SelectMany(p => p.Danhgia)
+                            .Count(),
+
                         SoSaoTrungBinh = bt.Phongs
-                                            .SelectMany(p => p.Danhgia)
-                                            .Average(d => (double?)d.SoSao) ?? 0
+                            .SelectMany(p => p.Danhgia)
+                            .Average(d => (double?)d.SoSao) ?? 0
                     }).ToList()
                 }).ToList();
             return Ok(new
