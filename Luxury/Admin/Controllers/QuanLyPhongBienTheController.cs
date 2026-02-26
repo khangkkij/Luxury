@@ -617,11 +617,19 @@ namespace Luxury.Admin.Controllers
 
                 // 4. Upload ảnh
                 // Xóa ảnh cũ
+                Console.WriteLine("Removed count: " + dto.RemovedImages?.Count);
                 if (dto.RemovedImages != null && dto.RemovedImages.Any())
                 {
-                    var imagesToDelete = _context.Hinhanhs
-                        .Where(x => x.MaBienThePhong == id &&
-                                    dto.RemovedImages.Contains(x.DuongDan))
+                    var allImages = _context.Hinhanhs
+                        .Where(x => x.MaBienThePhong == id)
+                        .ToList();
+
+                    var fileNames = dto.RemovedImages
+                        .Select(x => Path.GetFileName(x))
+                        .ToList();
+
+                    var imagesToDelete = allImages
+                        .Where(x => fileNames.Contains(Path.GetFileName(x.DuongDan)))
                         .ToList();
 
                     foreach (var img in imagesToDelete)
