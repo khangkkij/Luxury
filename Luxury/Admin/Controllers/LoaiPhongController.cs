@@ -61,7 +61,7 @@ namespace Luxury.Admin.Controllers
             if (lp == null) return NotFound();
             if (_context.LoaiphongBienthes.Any(x => x.MaLp == id))
             {
-                return BadRequest("Không thể xóa vì loại phòng đang được sử dụng");
+                return BadRequest("Không thể xóa vì hạng phòng đang được sử dụng");
             }
 
             _context.Loaiphongs.Remove(lp);
