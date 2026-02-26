@@ -66,6 +66,26 @@ namespace KhachSanLuxury.KhachHang.Controllers
                 .Include(bt => bt.ChitietFlashsales)
                     .ThenInclude(fs => fs.Flashsale)
                 .ToList();
+            var current = _context.LoaiphongBienthes
+                .Include(x => x.Thietlapgia)
+                .FirstOrDefault(x => x.MaBienThePhong == id);
+
+            decimal currentPrice = current.Thietlapgia
+                .Where(g => g.LoaiGia == "Giá ngày thường")
+                .OrderByDescending(g => g.NgayBatDau)
+                .Select(g => (decimal?)g.Gia)
+                .FirstOrDefault() ?? 0;
+            //var bienTheNgauNhien = _context.LoaiphongBienthes
+            //    .Include(bt => bt.MaLpNavigation)
+            //    .Include(bt => bt.Hinhanhs)
+            //    .Include(bt => bt.Phongs)
+            //    .Include(bt => bt.Thietlapgia)
+            //    .Include(bt => bt.ChitietFlashsales)
+            //        .ThenInclude(fs => fs.Flashsale)
+            //    .Where(bt => bt.MaBienThePhong != id)
+            //    .OrderBy(x => Guid.NewGuid())
+            //    .Take(3)
+            //    .ToList();
             var bienTheNgauNhien = _context.LoaiphongBienthes
                 .Include(bt => bt.MaLpNavigation)
                 .Include(bt => bt.Hinhanhs)
@@ -74,8 +94,18 @@ namespace KhachSanLuxury.KhachHang.Controllers
                 .Include(bt => bt.ChitietFlashsales)
                     .ThenInclude(fs => fs.Flashsale)
                 .Where(bt => bt.MaBienThePhong != id)
-                .OrderBy(x => Guid.NewGuid())
+                .Select(bt => new
+                {
+                    BienThe = bt,
+                    GiaThuong = bt.Thietlapgia
+                        .Where(g => g.LoaiGia == "Giá ngày thường")
+                        .OrderByDescending(g => g.NgayBatDau)
+                        .Select(g => g.Gia)
+                        .FirstOrDefault()
+                })
+                .OrderBy(x => Math.Abs((x.GiaThuong ?? 0) - currentPrice))
                 .Take(3)
+                .Select(x => x.BienThe)
                 .ToList();
             var result = new
             {
@@ -88,7 +118,7 @@ namespace KhachSanLuxury.KhachHang.Controllers
                     SoNguoiToiDa = bienThe.SoNguoiLon,
                     SoTreEm = bienThe.SoTreEm,
                     bienThe.DienTich,
-                    GiaGoc = TinhGiaHienTai(bienThe),
+                    Gia = TinhGiaHienTai(bienThe),
                     SoPhongCon = bienThe.Phongs.Count(p => p.TrangThai == 1),
                     AnhDaiDien = bienThe.Hinhanhs.Select(h => h.DuongDan).FirstOrDefault(),
                     DanhSachAnh = bienThe.Hinhanhs.Select(h => h.DuongDan).ToList(),
