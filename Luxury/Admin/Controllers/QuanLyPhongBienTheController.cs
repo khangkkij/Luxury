@@ -228,6 +228,30 @@ namespace Luxury.Admin.Controllers
             {
                 foreach (var p in dto.PriceRanges)
                 {
+                    if (p.NgayBatDau.Date > p.NgayKetThuc.Date)
+                        return BadRequest("Ngày bắt đầu phải nhỏ hơn hoặc bằng ngày kết thúc");
+                }
+
+                for (int i = 0; i < dto.PriceRanges.Count; i++)
+                {
+                    var start1 = dto.PriceRanges[i].NgayBatDau.Date;
+                    var end1 = dto.PriceRanges[i].NgayKetThuc.Date;
+
+                    for (int j = i + 1; j < dto.PriceRanges.Count; j++)
+                    {
+                        var start2 = dto.PriceRanges[j].NgayBatDau.Date;
+                        var end2 = dto.PriceRanges[j].NgayKetThuc.Date;
+
+                        bool isOverlap =
+                            start1 <= end2 &&
+                            end1 >= start2;
+
+                        if (isOverlap)
+                            return BadRequest("Các khoảng ngày lễ bị trùng nhau");
+                    }
+                }
+                foreach (var p in dto.PriceRanges)
+                {
                     _context.Thietlapgia.Add(new Thietlapgium
                     {
                         MaBienThePhong = bienThe.MaBienThePhong,
@@ -475,8 +499,6 @@ namespace Luxury.Admin.Controllers
                 var existingPrices = await _context.Thietlapgia
                     .Where(g => g.MaBienThePhong == id)
                     .ToListAsync();
-
-
                 // =========================
                 // 1️⃣ Update giá ngày thường
                 // =========================
@@ -528,48 +550,56 @@ namespace Luxury.Admin.Controllers
                     .Where(x => x.LoaiGia == "Lễ")
                     .ToList();
 
-                // Id lễ từ DTO
                 var dtoLeIds = dto.PriceRanges
                     .Where(x => x.MaThietLapGia != 0)
                     .Select(x => x.MaThietLapGia)
                     .ToList();
 
-                // Xóa lễ bị user xóa
                 var leToRemove = existingLe
                     .Where(x => !dtoLeIds.Contains(x.MaThietLap))
                     .ToList();
 
-                _context.Thietlapgia.RemoveRange(leToRemove);
+                var today = DateTime.Now.Date;
 
-
-                // Update hoặc thêm lễ
-                foreach (var dtoLe in dto.PriceRanges)
+                // ❌ Không cho xóa giá lễ đang dùng
+                foreach (var le in leToRemove)
                 {
-                    if (dtoLe.MaThietLapGia != 0)
+                    if (le.NgayBatDau.HasValue && le.NgayKetThuc.HasValue)
                     {
-                        var existing = existingLe
-                            .FirstOrDefault(x => x.MaThietLap == dtoLe.MaThietLapGia);
-
-                        if (existing != null)
+                        if (le.NgayBatDau.Value.Date <= today &&
+                            le.NgayKetThuc.Value.Date >= today)
                         {
-                            existing.Gia = dtoLe.Gia;
-                            existing.MoTa = dtoLe.MoTa;
-                            existing.NgayBatDau = dtoLe.NgayBatDau;
-                            existing.NgayKetThuc = dtoLe.NgayKetThuc;
+                            return BadRequest("Không thể xóa giá lễ đang được áp dụng hiện tại");
                         }
                     }
-                    else
-                    {
-                        _context.Thietlapgia.Add(new Thietlapgium
-                        {
-                            MaBienThePhong = id,
-                            Gia = dtoLe.Gia,
-                            LoaiGia = "Lễ",
-                            MoTa = dtoLe.MoTa,
-                            NgayBatDau = dtoLe.NgayBatDau,
-                            NgayKetThuc = dtoLe.NgayKetThuc
-                        });
-                    }
+                }
+
+                // Remove sau khi check xong
+                _context.Thietlapgia.RemoveRange(leToRemove);
+
+                // ✅ Chỉ check overlap với những cái còn tồn tại
+                var existingLeInDb = existingLe
+                    .Where(x => !leToRemove.Contains(x))
+                    .ToList();
+
+                foreach (var dtoLe in dto.PriceRanges)
+                {
+                    var newStart = dtoLe.NgayBatDau.Date;
+                    var newEnd = dtoLe.NgayKetThuc.Date;
+
+                    if (newStart > newEnd)
+                        return BadRequest("Ngày bắt đầu phải nhỏ hơn hoặc bằng ngày kết thúc");
+
+                    var isOverlap = existingLeInDb.Any(old =>
+                        old.MaThietLap != dtoLe.MaThietLapGia &&
+                        old.NgayBatDau.HasValue &&
+                        old.NgayKetThuc.HasValue &&
+                        newStart <= old.NgayKetThuc.Value.Date &&
+                        newEnd >= old.NgayBatDau.Value.Date
+                    );
+
+                    if (isOverlap)
+                        return BadRequest("Khoảng ngày lễ bị trùng với một giá lễ đã tồn tại");
                 }
                 // 3. Update tiện ích
                 var oldTienIch = _context.TienichLoaiphongs
@@ -585,7 +615,31 @@ namespace Luxury.Admin.Controllers
                     });
                 }
 
-                // 4. Upload ảnh mới (không xóa ảnh cũ)
+                // 4. Upload ảnh
+                // Xóa ảnh cũ
+                if (dto.RemovedImages != null && dto.RemovedImages.Any())
+                {
+                    var imagesToDelete = _context.Hinhanhs
+                        .Where(x => x.MaBienThePhong == id &&
+                                    dto.RemovedImages.Contains(x.DuongDan))
+                        .ToList();
+
+                    foreach (var img in imagesToDelete)
+                    {
+                        var fullPath = Path.Combine(
+                            Directory.GetCurrentDirectory(),
+                            "wwwroot",
+                            img.DuongDan.Replace("/", Path.DirectorySeparatorChar.ToString())
+                        );
+
+                        if (System.IO.File.Exists(fullPath))
+                        {
+                            System.IO.File.Delete(fullPath);
+                        }
+                    }
+
+                    _context.Hinhanhs.RemoveRange(imagesToDelete);
+                }
                 if (dto.Images != null && dto.Images.Any())
                 {
                     var uploadPath = Path.Combine(
