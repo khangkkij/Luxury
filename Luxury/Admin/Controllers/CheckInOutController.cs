@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Luxury.Admin.Controllers
 {
@@ -16,6 +17,8 @@ namespace Luxury.Admin.Controllers
     {
         private readonly LuxuryHotelContext _context;
         private readonly IConfiguration _configuration;
+        private readonly IServiceScopeFactory _scopeFactory;
+
 
         private const string TrangThaiChoNhanPhong = "ChoNhanPhong";
         private const string TrangThaiDangO = "DangO";
@@ -26,10 +29,11 @@ namespace Luxury.Admin.Controllers
         private const string LoaiThanhToan = "ThanhToan";
         private const string LoaiTamUng = "TamUng";
 
-        public CheckInOutController(LuxuryHotelContext context, IConfiguration configuration)
+        public CheckInOutController(LuxuryHotelContext context, IConfiguration configuration, IServiceScopeFactory scopeFactory)
         {
             _context = context;
             _configuration = configuration;
+            _scopeFactory = scopeFactory; // Gán biến
         }
 
         // 1. Thay thế hàm GetBookingsReadyForCheckIn cũ bằng hàm này
@@ -548,7 +552,30 @@ namespace Luxury.Admin.Controllers
             // Đã xóa phần tạo thanh toán hoàn tiền
 
             _context.SaveChanges();
+            // =============== THÊM MỚI ĐOẠN NÀY ===============
+            // Lấy ID phòng để cập nhật ngầm
+            int maPhongCanDonDep = chiTiet.MaPhongNavigation.MaPhong;
 
+            // Chạy ngầm một Task không chờ (Fire-and-forget)
+            _ = Task.Run(async () =>
+            {
+                // Đợi 30 phút (Nếu muốn test nhanh, bạn có thể đổi thành TimeSpan.FromSeconds(30))
+                await Task.Delay(TimeSpan.FromMinutes(30));
+
+                // Phải tạo Scope mới vì Request hiện tại đã kết thúc
+                using (var scope = _scopeFactory.CreateScope())
+                {
+                    var scopedContext = scope.ServiceProvider.GetRequiredService<LuxuryHotelContext>();
+                    var phong = await scopedContext.Phongs.FirstOrDefaultAsync(p => p.MaPhong == maPhongCanDonDep);
+
+                    // Kiểm tra nếu phòng vẫn đang ở trạng thái 3 (Đang dọn dẹp) thì mới chuyển về 1 (Trống)
+                    if (phong != null && phong.TrangThai == 3)
+                    {
+                        phong.TrangThai = 1;
+                        await scopedContext.SaveChangesAsync();
+                    }
+                }
+            });
             return Ok(new
             {
                 message = "Check-out thành công",
