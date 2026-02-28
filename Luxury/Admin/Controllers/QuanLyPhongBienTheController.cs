@@ -549,7 +549,8 @@ namespace Luxury.Admin.Controllers
                 var existingLe = existingPrices
                     .Where(x => x.LoaiGia == "Lễ")
                     .ToList();
-
+                dto.PriceRanges ??= new List<PriceRangeDto>();
+                dto.RemovedImages ??= new List<string>();
                 var dtoLeIds = dto.PriceRanges
                     .Where(x => x.MaThietLapGia != 0)
                     .Select(x => x.MaThietLapGia)
@@ -623,6 +624,12 @@ namespace Luxury.Admin.Controllers
                     var allImages = _context.Hinhanhs
                         .Where(x => x.MaBienThePhong == id)
                         .ToList();
+                    int remaining = allImages.Count - dto.RemovedImages.Count;
+
+                    if (remaining <= 0)
+                    {
+                        return BadRequest("Phải để ít nhất 1 ảnh");
+                    }
 
                     var fileNames = dto.RemovedImages
                         .Select(x => Path.GetFileName(x))
