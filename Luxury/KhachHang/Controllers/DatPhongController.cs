@@ -206,7 +206,9 @@ namespace KhachSanLuxury.KhachHang.Controllers
                 NgayTao = DateTime.Now
             };
 
-            datPhong.TrangThai = TrangThaiChoXacNhan;
+           //SỬA Ở ĐÂY
+
+           // datPhong.TrangThai = TrangThaiChoXacNhan;
             _context.Hoadons.Add(hoaDon);
             _context.SaveChanges();
 

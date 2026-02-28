@@ -80,6 +80,18 @@ namespace KhachSanLuxury.KhachHang.Controllers
                 });
             }
 
+            // Tiền mặt / offline: chuyển trạng thái luôn vì không có callback
+            if (IsOfflineMethod(method))
+            {
+                MarkPaymentSuccess(thanhToan.MaTt);
+                return Ok(new
+                {
+                    message = "Tạo đặt cọc thành công",
+                    maTt = thanhToan.MaTt,
+                    redirectUrl = BuildFrontendUrl("/xac-nhan-dat-phong?status=success")
+                });
+            }
+
             if (IsOnlineMethod(method))
             {
                 try
@@ -162,6 +174,18 @@ namespace KhachSanLuxury.KhachHang.Controllers
                     message = "Tạo thanh toán thành công",
                     maTt = thanhToan.MaTt,
                     redirectUrl = BuildFrontendUrl("/xac-nhan-dat-phong?status=success&demo=1")
+                });
+            }
+
+            // Tiền mặt / offline: chuyển trạng thái luôn vì không có callback
+            if (IsOfflineMethod(method))
+            {
+                MarkPaymentSuccess(thanhToan.MaTt);
+                return Ok(new
+                {
+                    message = "Tạo thanh toán thành công",
+                    maTt = thanhToan.MaTt,
+                    redirectUrl = BuildFrontendUrl("/xac-nhan-dat-phong?status=success")
                 });
             }
 
@@ -346,6 +370,12 @@ namespace KhachSanLuxury.KhachHang.Controllers
         private bool IsOnlineMethod(string method)
         {
             return method == "vnpay" || method == "momo";
+        }
+
+        /// <summary>Tiền mặt / offline - thanh toán xong chuyển trạng thái luôn</summary>
+        private bool IsOfflineMethod(string method)
+        {
+            return method == "cash" || method == "tienmat" || method == "tien_mat" || method == "card";
         }
 
         private async Task<string?> CreatePaymentRedirectUrl(string method, int maTt, decimal soTien)
