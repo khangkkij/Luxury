@@ -53,11 +53,13 @@ namespace Luxury.Admin.Controllers
 					thanhToan = dp.Thanhtoans.OrderByDescending(t => t.MaTt).FirstOrDefault();
 				}
 
-				// Logic tính toán chi tiết (Giữ nguyên)
+				// Tính chi tiết phòng
 				var listPhong = dp?.Chitietdatphongs.Select(ct =>
 				{
-					int soNgay = (ct.NgayTra.HasValue && ct.NgayNhan.HasValue) ? (ct.NgayTra.Value - ct.NgayNhan.Value).Days : 0;
+					// THÊM .Date VÀO SAU Value ĐỂ ĐỒNG BỘ VỚI LOGIC CHECK-OUT
+					int soNgay = (ct.NgayTra.HasValue && ct.NgayNhan.HasValue) ? (ct.NgayTra.Value.Date - ct.NgayNhan.Value.Date).Days : 0;
 					if (soNgay <= 0) soNgay = 1;
+
 					return new ChiTietPhongItem
 					{
 						SoPhong = ct.MaPhongNavigation?.SoPhong ?? "Unknown",
@@ -68,15 +70,33 @@ namespace Luxury.Admin.Controllers
 					};
 				}).ToList() ?? new List<ChiTietPhongItem>();
 
+				// Tính chi tiết dịch vụ
 				var listDichVu = dp?.Chitietdatphongs
 					.SelectMany(ct => ct.SudungDichvus)
 					.Select(sd => new ChiTietDichVuItem
 					{
 						TenDV = sd.MaDichVuNavigation?.TenDichVu ?? "Dịch vụ",
-						SoLuong = 1,
+						SoLuong = 1, // Bạn có thể lấy sd.SoLuong nếu DB có cột này
 						DonGia = sd.MaDichVuNavigation?.Gia ?? 0,
 						ThanhTien = sd.ThanhTien ?? (sd.MaDichVuNavigation?.Gia ?? 0)
 					}).ToList() ?? new List<ChiTietDichVuItem>();
+
+				// ==========================================
+				// LOGIC TÍNH PHỤ THU & PHÂN BỔ GIẢM GIÁ MỚI
+				// ==========================================
+				// Tính Phụ thu và Tiền cọc
+				var tongTienPhong = listPhong.Sum(p => p.ThanhTien);
+				var tongTienDichVu = listDichVu.Sum(d => d.ThanhTien);
+
+				var phuThu = (h.TongTienGoc ?? 0) - tongTienPhong - tongTienDichVu;
+				if (phuThu < 0) phuThu = 0;
+
+				decimal tienCoc = 0;
+				var listPrepaid = dp?.Thanhtoans.Where(t => t.TrangThai == "DaThanhToan" && t.LoaiThanhToan != "HoanTien" && t.MaHd == null).ToList();
+				if (listPrepaid != null && listPrepaid.Any())
+				{
+					tienCoc = listPrepaid.Sum(t => t.SoTien ?? 0);
+				}
 
 				return new HoaDonDTO
 				{
@@ -85,18 +105,20 @@ namespace Luxury.Admin.Controllers
 					TrangThai = thanhToan?.TrangThai ?? dp?.TrangThai ?? "Không rõ",
 					TenKhachHang = dp?.MaKhNavigation?.HoVaTen ?? "Khách vãng lai",
 					Sdt = dp?.MaKhNavigation?.Sdt ?? "",
-
-					// --- THÔNG TIN NHÂN VIÊN MỚI ---
 					TenNhanVien = dp?.MaNvNavigation?.HoTenNv ?? "Không rõ",
-					// Lấy hình ảnh (nếu null thì để chuỗi rỗng hoặc link ảnh mặc định)
 					HinhAnhNhanVien = dp?.MaNvNavigation?.HinhAnh ?? "",
-					// Lấy tên chức vụ từ bảng ChucVu (Dùng ? để tránh lỗi nếu null)
 					ChucVuNhanVien = dp?.MaNvNavigation?.MaChucVuNavigation?.TenChucVu ?? "Không rõ",
-
 					LoaiThanhToan = thanhToan?.LoaiThanhToan,
+
 					TongTienGoc = h.TongTienGoc ?? 0,
 					SoTienGiam = h.SoTienGiam ?? 0,
 					TongTienPhaiTra = h.TongTienPhaiTra ?? 0,
+
+					// Gán 3 biến mới vào DTO
+					PhuThu = phuThu,    // <--- THÊM VÀO ĐÂY
+					TienCoc = tienCoc,
+
+					// Gán tiền cọc vào DTO để đưa lên Vu
 					ChiTietPhong = listPhong,
 					DichVu = listDichVu
 				};
