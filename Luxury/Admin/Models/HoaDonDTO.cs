@@ -21,6 +21,12 @@
 		public decimal SoTienGiam { get; set; }
 		public decimal TongTienPhaiTra { get; set; }
 
+		public decimal PhuThu { get; set; }
+		public decimal TienGiamVoucher { get; set; }
+		public decimal TienGiamFlashSale { get; set; }
+
+		public decimal TienCoc { get; set; }
+
 		// DANH SÁCH 1: CHI TIẾT PHÒNG
 		public List<ChiTietPhongItem> ChiTietPhong { get; set; }
 

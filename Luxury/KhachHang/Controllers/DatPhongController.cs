@@ -138,13 +138,13 @@ namespace KhachSanLuxury.KhachHang.Controllers
                 foreach (var phong in danhSachPhongTrong)
                 {
                     // 2. Cập nhật trạng thái phòng thành 0 (Đã được đặt) để trừ số lượng phòng trống
-                    phong.TrangThai = 0;
+                    phong.TrangThai = 1;
 
                     var ganSoNguoi = !daGanSoNguoi;
                     var chiTiet = new Chitietdatphong
                     {
                         MaDatPhong = datPhong.MaDatPhong,
-                        MaPhong = phong.MaPhong, // 3. Gán mã phòng cụ thể đã giữ chỗ
+                        MaPhong = null, // 3. Gán mã phòng cụ thể đã giữ chỗ
                         GiaDat = item.GiaDat,
                         NgayNhan = request.NgayNhan,
                         NgayTra = request.NgayTra,
@@ -206,7 +206,7 @@ namespace KhachSanLuxury.KhachHang.Controllers
                 NgayTao = DateTime.Now
             };
 
-            datPhong.TrangThai = TrangThaiChoXacNhan;
+            //datPhong.TrangThai = TrangThaiChoXacNhan;
             _context.Hoadons.Add(hoaDon);
             _context.SaveChanges();
 
