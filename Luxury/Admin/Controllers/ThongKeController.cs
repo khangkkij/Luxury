@@ -56,7 +56,6 @@ namespace Luxury.Controllers
             if (!string.IsNullOrEmpty(status) && status != "all")
                 query = query.Where(dp => dp.TrangThai == status);
 
-            var totalOrders = await query.CountAsync();
             var recentOrders = await query.OrderByDescending(dp => dp.NgayDat).Take(20)
                 .Select(dp => new {
                     maDatPhong = dp.MaDatPhong,
@@ -67,7 +66,33 @@ namespace Luxury.Controllers
                     trangThai = dp.TrangThai
                 }).ToListAsync();
 
-            return Ok(new { summary = new { totalRevenue, totalOrders }, revenueChart, roomTypeStats, recentOrders });
+            return Ok(new { summary = new { totalRevenue, totalOrders = await query.CountAsync() }, revenueChart, roomTypeStats, recentOrders });
+        }
+
+        // API CHI TIẾT ĐƠN HÀNG (Dùng cho Modal)
+        [HttpGet("order-detail/{id}")]
+        public async Task<IActionResult> GetOrderDetail(int id)
+        {
+            var data = await _context.Datphongs
+                .Include(dp => dp.MaKhNavigation)
+                .Include(dp => dp.Hoadons)
+                .Include(dp => dp.Chitietdatphongs)
+                    .ThenInclude(ct => ct.MaPhongNavigation.MaBienThePhongNavigation.MaLpNavigation)
+                .Where(dp => dp.MaDatPhong == id)
+                .Select(dp => new {
+                    maDatPhong = dp.MaDatPhong,
+                    hoVaTen = dp.MaKhNavigation.HoVaTen,
+                    sdt = dp.MaKhNavigation.Sdt, // Sử dụng Sdt theo Model của bạn
+                    tenLoai = dp.Chitietdatphongs.Select(ct => ct.MaPhongNavigation.MaBienThePhongNavigation.MaLpNavigation.TenLoai).FirstOrDefault() ?? "N/A",
+                    soDem = dp.Chitietdatphongs.Count(),
+                    tongTienPhaiTra = dp.Hoadons.Select(h => h.TongTienPhaiTra).FirstOrDefault() ?? dp.TongTienDuKien,
+                    tongTienGoc = dp.TongTienDuKien,
+                    soTienGiam = (dp.TongTienDuKien ?? 0) - (dp.Hoadons.Select(h => h.TongTienPhaiTra).FirstOrDefault() ?? dp.TongTienDuKien ?? 0)
+                })
+                .FirstOrDefaultAsync();
+
+            if (data == null) return NotFound();
+            return Ok(data);
         }
     }
 }
