@@ -34,16 +34,20 @@ namespace Luxury.KhachHang.Controllers
             if (maKH == 0) return Unauthorized(new { message = "Không tìm thấy thông tin khách hàng" });
 
             var query = await _context.Datphongs
-                // 1. Phải Include bảng biến thể để lấy tên, loại giường, hướng nhìn
                 .Include(dp => dp.MaBienThePhongNavigation)
                 .Where(dp => dp.MaKh == maKH &&
-                             _context.Thanhtoans.Any(tt => tt.MaDatPhong == dp.MaDatPhong && tt.TrangThai == "Đã thanh toán") &&
+                             // Điều kiện 1: Trạng thái đặt phòng là TraPhong (đã sử dụng xong)
+                             dp.TrangThai == "TraPhong" &&
+                             // Điều kiện 2: Có bản ghi thanh toán cuối cùng (loại ThanhToan) và đã hoàn tất
+                             _context.Thanhtoans.Any(tt => tt.MaDatPhong == dp.MaDatPhong &&
+                                                           tt.LoaiThanhToan == "ThanhToan" &&
+                                                           tt.TrangThai.StartsWith("DaThanhToan")) &&
+                             // Điều kiện 3: Chưa tồn tại đánh giá cho mã đặt phòng này
                              !_context.Danhgia.Any(dg => dg.MaDatPhong == dp.MaDatPhong))
                 .Select(dp => new
                 {
                     dp.MaDatPhong,
                     dp.NgayDat,
-                    // Trả về đúng tên để Vue nhận diện (C# tự convert sang camelCase khi trả về JSON)
                     TenBienThe = dp.MaBienThePhongNavigation != null ? dp.MaBienThePhongNavigation.TenBienThe : "Chưa xác định",
                     LoaiGiuong = dp.MaBienThePhongNavigation != null ? dp.MaBienThePhongNavigation.LoaiGiuong : "",
                     HuongNhin = dp.MaBienThePhongNavigation != null ? dp.MaBienThePhongNavigation.HuongNhin : ""
@@ -69,6 +73,8 @@ namespace Luxury.KhachHang.Controllers
                     dg.NoiDung,
                     dg.NgayDanhGia,
                     dg.HinhAnh,
+                    dg.PhanHoi,
+                    dg.NgayPhanHoi,
                     TenPhong = dg.MaDatPhongNavigation.MaBienThePhongNavigation != null ? dg.MaDatPhongNavigation.MaBienThePhongNavigation.TenBienThe : "Chưa xác định",
                     LoaiGiuong = dg.MaDatPhongNavigation.MaBienThePhongNavigation != null ? dg.MaDatPhongNavigation.MaBienThePhongNavigation.LoaiGiuong : "",
                     HuongNhin = dg.MaDatPhongNavigation.MaBienThePhongNavigation != null ? dg.MaDatPhongNavigation.MaBienThePhongNavigation.HuongNhin : ""
@@ -86,9 +92,11 @@ namespace Luxury.KhachHang.Controllers
             // KIỂM TRA BẢO MẬT: Đảm bảo đơn hàng này đúng là của ông khách đang đăng nhập
             // Và đơn này PHẢI đã thanh toán thì mới cho phép INSERT vào bảng đánh giá
             var checkHopLe = await _context.Thanhtoans
-                .AnyAsync(tt => tt.MaDatPhong == model.MaDatPhong &&
-                                tt.MaDatPhongNavigation.MaKh == maKH &&
-                                tt.TrangThai == "Đã thanh toán");
+        .AnyAsync(tt => tt.MaDatPhong == model.MaDatPhong &&
+                        tt.MaDatPhongNavigation.MaKh == maKH &&
+                        tt.LoaiThanhToan == "ThanhToan" && // Phải là loại thanh toán quyết toán
+                        tt.TrangThai.StartsWith("DaThanhToan") && // Đã thanh toán xong
+                        tt.MaDatPhongNavigation.TrangThai == "TraPhong"); // Đã trả phòng
 
             if (!checkHopLe)
             {
@@ -161,50 +169,50 @@ namespace Luxury.KhachHang.Controllers
 
         [HttpGet("GetByRoom/{variantId}")]
         [AllowAnonymous]
-		public async Task<IActionResult> GetReviewsByVariant(int variantId)
-		{
-			try
-			{
-				// Truy vấn: 
-				// 1. Lấy bảng đánh giá
-				// 2. Kèm thông tin Đặt phòng -> Khách hàng (để lấy tên/avatar)
-				// 3. Kèm thông tin Phòng (để check xem phòng này có thuộc variantId đang xem không)
-				var reviews = await _context.Danhgia
-					.Include(dg => dg.MaDatPhongNavigation)
-						.ThenInclude(dp => dp.MaKhNavigation) // Join sang bảng Khách hàng
-					.Include(dg => dg.MaPhongNavigation)      // Join sang bảng Phòng
-					.Where(dg =>
-						dg.MaPhongNavigation.MaBienThePhong == variantId && // Chỉ lấy đánh giá thuộc loại phòng này
-						dg.TrangThai == 1 // Chỉ lấy đánh giá đã được duyệt (nếu quy định 1 là hiện)
-					)
-					.OrderByDescending(dg => dg.NgayDanhGia) // Mới nhất lên đầu
-					.Select(dg => new DanhGiaViewModel
-					{
-						MaDg = dg.MaDg,
-						SoSao = dg.SoSao ?? 0,
-						NoiDung = dg.NoiDung,
-						NgayDanhGia = dg.NgayDanhGia ?? DateTime.Now,
-						PhanHoi = dg.PhanHoi,
+        public async Task<IActionResult> GetReviewsByVariant(int variantId)
+        {
+            try
+            {
+                // Truy vấn: 
+                // 1. Lấy bảng đánh giá
+                // 2. Kèm thông tin Đặt phòng -> Khách hàng (để lấy tên/avatar)
+                // 3. Kèm thông tin Phòng (để check xem phòng này có thuộc variantId đang xem không)
+                var reviews = await _context.Danhgia
+                    .Include(dg => dg.MaDatPhongNavigation)
+                        .ThenInclude(dp => dp.MaKhNavigation) // Join sang bảng Khách hàng
+                    .Include(dg => dg.MaPhongNavigation)      // Join sang bảng Phòng
+                    .Where(dg =>
+                        dg.MaPhongNavigation.MaBienThePhong == variantId && // Chỉ lấy đánh giá thuộc loại phòng này
+                        dg.TrangThai == 1 // Chỉ lấy đánh giá đã được duyệt (nếu quy định 1 là hiện)
+                    )
+                    .OrderByDescending(dg => dg.NgayDanhGia) // Mới nhất lên đầu
+                    .Select(dg => new DanhGiaViewModel
+                    {
+                        MaDg = dg.MaDg,
+                        SoSao = dg.SoSao ?? 0,
+                        NoiDung = dg.NoiDung,
+                        NgayDanhGia = dg.NgayDanhGia ?? DateTime.Now,
+                        PhanHoi = dg.PhanHoi,
 
-						// Xử lý lấy tên khách hàng an toàn (null check)
-						TenKhachHang = dg.MaDatPhongNavigation != null && dg.MaDatPhongNavigation.MaKhNavigation != null
-									   ? dg.MaDatPhongNavigation.MaKhNavigation.HoVaTen
-									   : "Khách hàng ẩn danh",
+                        // Xử lý lấy tên khách hàng an toàn (null check)
+                        TenKhachHang = dg.MaDatPhongNavigation != null && dg.MaDatPhongNavigation.MaKhNavigation != null
+                                       ? dg.MaDatPhongNavigation.MaKhNavigation.HoVaTen
+                                       : "Khách hàng ẩn danh",
 
-						// Lấy avatar, nếu null thì Frontend sẽ tự xử lý avatar mặc định
-						Avatar = dg.MaDatPhongNavigation != null && dg.MaDatPhongNavigation.MaKhNavigation != null
-								 ? dg.MaDatPhongNavigation.MaKhNavigation.HinhAnh
-								 : null
-					})
-					.ToListAsync();
+                        // Lấy avatar, nếu null thì Frontend sẽ tự xử lý avatar mặc định
+                        Avatar = dg.MaDatPhongNavigation != null && dg.MaDatPhongNavigation.MaKhNavigation != null
+                                 ? dg.MaDatPhongNavigation.MaKhNavigation.HinhAnh
+                                 : null
+                    })
+                    .ToListAsync();
 
-				return Ok(reviews);
-			}
-			catch (Exception ex)
-			{
-				return StatusCode(500, "Lỗi server: " + ex.Message);
-			}
-		}
-	}
+                return Ok(reviews);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "Lỗi server: " + ex.Message);
+            }
+        }
     }
+}
 
