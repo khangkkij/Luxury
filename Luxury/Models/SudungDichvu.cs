@@ -16,7 +16,7 @@ public partial class SudungDichvu
     public DateTime? NgaySuDung { get; set; }
 
     public decimal? ThanhTien { get; set; }
-
+    public int? TrangThai { get; set; }
     public virtual Chitietdatphong? MaCtdpNavigation { get; set; }
 
     public virtual Dichvu? MaDichVuNavigation { get; set; }
