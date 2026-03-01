@@ -144,7 +144,7 @@ namespace KhachSanLuxury.KhachHang.Controllers
                     var chiTiet = new Chitietdatphong
                     {
                         MaDatPhong = datPhong.MaDatPhong,
-                        MaPhong = phong.MaPhong, // 3. Gán mã phòng cụ thể đã giữ chỗ
+                        MaPhong = null, // 3. Gán mã phòng cụ thể đã giữ chỗ
                         GiaDat = item.GiaDat,
                         NgayNhan = request.NgayNhan,
                         NgayTra = request.NgayTra,
@@ -295,6 +295,8 @@ namespace KhachSanLuxury.KhachHang.Controllers
                 .Include(x => x.Hoadons)
                 .Include(x => x.MaBienThePhongNavigation)
                     .ThenInclude(bt => bt.MaLpNavigation)
+                .Include(x => x.MaBienThePhongNavigation)
+                    .ThenInclude(bt => bt.MaLpNavigation)
                 .Include(x => x.Chitietdatphongs)
                     .ThenInclude(ct => ct.MaPhongNavigation)
                         .ThenInclude(p => p.MaBienThePhongNavigation)
@@ -326,69 +328,92 @@ namespace KhachSanLuxury.KhachHang.Controllers
         [HttpGet("lich-su/{maDatPhong}")]
         public IActionResult LichSuDatPhongChiTiet(int maDatPhong)
         {
-            if (maDatPhong <= 0)
-            {
-                return BadRequest("MaDatPhong không hợp lệ");
-            }
+            if (maDatPhong <= 0) return BadRequest("Mã đặt phòng không hợp lệ");
 
             var maKh = GetMaKhFromCookie();
-            if (maKh == null || maKh <= 0)
-            {
-                return Unauthorized("Vui lòng đăng nhập để xem chi tiết.");
-            }
+            if (maKh == null || maKh <= 0) return Unauthorized("Vui lòng đăng nhập.");
 
             var datPhong = _context.Datphongs
                 .AsNoTracking()
                 .Include(x => x.MaKhNavigation)
                 .Include(x => x.Hoadons)
                 .Include(x => x.Chitietdatphongs)
-                    .ThenInclude(x => x.MaPhongNavigation)
-                        .ThenInclude(x => x.MaBienThePhongNavigation)
-                            .ThenInclude(x => x.MaLpNavigation)
+                    .ThenInclude(ct => ct.MaPhongNavigation)
+                        .ThenInclude(p => p.MaBienThePhongNavigation)
+                            .ThenInclude(bt => bt.MaLpNavigation)
                 .Include(x => x.Chitietdatphongs)
-                    .ThenInclude(x => x.MaPhongNavigation)
-                        .ThenInclude(x => x.MaBienThePhongNavigation)
-                            .ThenInclude(x => x.Hinhanhs)
+                    .ThenInclude(ct => ct.SudungDichvus)
+                        .ThenInclude(sd => sd.MaDichVuNavigation)
                 .FirstOrDefault(x => x.MaDatPhong == maDatPhong && x.MaKh == maKh);
 
-            if (datPhong == null)
-            {
-                return NotFound("Không tìm thấy đặt phòng.");
-            }
+            if (datPhong == null) return NotFound("Không tìm thấy đặt phòng.");
 
             var hoaDon = datPhong.Hoadons.OrderByDescending(h => h.NgayTao).FirstOrDefault();
             var chiTiet = datPhong.Chitietdatphongs.FirstOrDefault();
-            var bienThe = chiTiet?.MaPhongNavigation?.MaBienThePhongNavigation;
+            var bienThe = chiTiet?.MaPhongNavigation?.MaBienThePhongNavigation ?? datPhong.MaBienThePhongNavigation;
 
+            // Tính số đêm và tiền phòng gốc
             var ngayNhan = chiTiet?.NgayNhan;
             var ngayTra = chiTiet?.NgayTra;
-            int soDem = 0;
-            if (ngayNhan.HasValue && ngayTra.HasValue)
+            int soDem = (ngayNhan.HasValue && ngayTra.HasValue) ? (ngayTra.Value.Date - ngayNhan.Value.Date).Days : 1;
+            if (soDem <= 0) soDem = 1;
+            decimal tienPhongGoc = (chiTiet?.GiaDat ?? 0) * soDem;
+
+            // Lấy danh sách dịch vụ và tổng tiền dịch vụ
+            var danhSachDichVu = datPhong.Chitietdatphongs
+                .SelectMany(ct => ct.SudungDichvus)
+                .Select(sd => new {
+                    tenDichVu = sd.MaDichVuNavigation?.TenDichVu ?? "Dịch vụ",
+                    soLuong = sd.SoLuong,
+                    thanhTien = sd.ThanhTien ?? 0
+                }).ToList();
+            decimal tongTienDichVu = danhSachDichVu.Sum(x => x.thanhTien);
+
+            // --- XỬ LÝ VOUCHER THEO DATABASE CỦA BẠN ---
+            decimal phanTramGiamVoucher = 0;
+            if (!string.IsNullOrEmpty(datPhong.MaCode))
             {
-                soDem = (ngayTra.Value.Date - ngayNhan.Value.Date).Days;
-                if (soDem <= 0) soDem = 1;
+                var voucher = _context.Vouchers.FirstOrDefault(v => v.MaCode == datPhong.MaCode);
+                if (voucher != null)
+                {
+                    // Ép kiểu decimal để tránh lỗi CS0266 và dùng đúng tên cột phanTramGiam
+                    phanTramGiamVoucher = (decimal)(voucher.PhanTramGiam ?? 0);
+                }
             }
 
-            var anhDaiDien = bienThe?.Hinhanhs.Select(h => h.DuongDan).FirstOrDefault();
+            decimal tongTienGoc = tienPhongGoc + tongTienDichVu;
+            decimal tongTienPhaiTra = hoaDon?.TongTienPhaiTra ?? datPhong.TongTienDuKien ?? 0;
+
+            // Tính toán số tiền giảm: Ưu tiên hóa đơn > Tính theo % tiền phòng > Tính theo chênh lệch
+            decimal soTienGiamHienThi = (hoaDon?.SoTienGiam > 0)
+                ? (decimal)hoaDon.SoTienGiam
+                : (phanTramGiamVoucher > 0 ? (tienPhongGoc * phanTramGiamVoucher / 100) : (tongTienGoc - tongTienPhaiTra));
 
             return Ok(new
             {
                 maDatPhong = datPhong.MaDatPhong,
                 ngayDat = datPhong.NgayDat,
                 trangThai = datPhong.TrangThai ?? string.Empty,
+                maCode = datPhong.MaCode,
+                phanTramVoucher = phanTramGiamVoucher, // Trả về để Vue hiển thị %
+
                 hoVaTen = datPhong.MaKhNavigation?.HoVaTen,
                 email = datPhong.MaKhNavigation?.Email,
                 sdt = datPhong.MaKhNavigation?.Sdt,
+
                 ngayNhan = ngayNhan,
                 ngayTra = ngayTra,
                 soDem = soDem,
                 giaDat = chiTiet?.GiaDat,
                 tenLoai = bienThe?.MaLpNavigation?.TenLoai,
                 tenBienThe = bienThe?.TenBienThe,
-                anhDaiDien = anhDaiDien,
-                tongTienGoc = hoaDon?.TongTienGoc ?? datPhong.TongTienDuKien ?? 0,
-                soTienGiam = hoaDon?.SoTienGiam ?? 0,
-                tongTienPhaiTra = hoaDon?.TongTienPhaiTra ?? datPhong.TongTienDuKien ?? 0
+                anhDaiDien = bienThe?.Hinhanhs?.Select(h => h.DuongDan).FirstOrDefault(),
+
+                dichVus = danhSachDichVu,
+
+                tongTienGoc = tongTienGoc,
+                soTienGiam = soTienGiamHienThi,
+                tongTienPhaiTra = tongTienPhaiTra
             });
         }
 
