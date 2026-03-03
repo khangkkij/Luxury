@@ -1,6 +1,7 @@
 ﻿using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using DocumentFormat.OpenXml.Drawing.Diagrams;
 using Luxury.Models;
 using Luxury.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -25,7 +26,7 @@ builder.Services.AddControllers()
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-
+builder.Services.AddSignalR(); 
 // --- 2. Cấu hình Database ---
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<LuxuryHotelContext>(options =>
@@ -112,6 +113,10 @@ if (!Directory.Exists(userImgPath))
 {
     Directory.CreateDirectory(userImgPath);
 }
+
+
+app.MapHub<hotelHub>("/hotelHub"); // Đăng ký SignalR Hub
+
 
 app.UseStaticFiles(); // Cho thư mục wwwroot mặc định
 
