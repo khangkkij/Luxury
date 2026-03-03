@@ -1,4 +1,6 @@
-﻿namespace Luxury.KhachHang.ViewModel
+﻿using System.Reflection.Metadata;
+
+namespace Luxury.KhachHang.ViewModel
 {
 	public class BestDealViewModel
 	{
@@ -11,5 +13,8 @@
 		public decimal? GiaGoc { get; set; } // Để hiển thị gạch ngang nếu cần
 		public string HinhAnh { get; set; }
 		public string MoTa { get; set; }
+
+		public string PhanTramGiam { get; set; } // Thêm trường này để hiển thị % giảm giá nếu có
+
 	}
 }
