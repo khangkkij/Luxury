@@ -192,10 +192,12 @@ namespace Luxury.KhachHang.Controllers
                         SoSao = dg.SoSao ?? 0,
                         NoiDung = dg.NoiDung,
                         NgayDanhGia = dg.NgayDanhGia ?? DateTime.Now,
-                        PhanHoi = dg.PhanHoi,
+						HinhAnh = dg.HinhAnh,
+						PhanHoi = dg.PhanHoi,
+                        NgayPhanHoi = dg.NgayPhanHoi.HasValue ? dg.NgayPhanHoi.Value.ToString("yyyy-MM-dd HH:mm") : null,
 
-                        // Xử lý lấy tên khách hàng an toàn (null check)
-                        TenKhachHang = dg.MaDatPhongNavigation != null && dg.MaDatPhongNavigation.MaKhNavigation != null
+						// Xử lý lấy tên khách hàng an toàn (null check)
+						TenKhachHang = dg.MaDatPhongNavigation != null && dg.MaDatPhongNavigation.MaKhNavigation != null
                                        ? dg.MaDatPhongNavigation.MaKhNavigation.HoVaTen
                                        : "Khách hàng ẩn danh",
 
