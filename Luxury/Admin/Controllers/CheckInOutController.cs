@@ -1,15 +1,18 @@
 using Luxury.Admin.ViewModel;
 using Luxury.Helpers;
 using Luxury.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Luxury.Admin.Controllers
 {
+    [Authorize]
     [Route("api/admin/[controller]")]
     [Route("api/nhanvien/[controller]")]
     [ApiController]
@@ -35,6 +38,7 @@ namespace Luxury.Admin.Controllers
             _configuration = configuration;
             _scopeFactory = scopeFactory; // Gán biến
         }
+
 
         // 1. Thay thế hàm GetBookingsReadyForCheckIn cũ bằng hàm này
         [HttpGet("bookings-ready")]
@@ -427,10 +431,18 @@ namespace Luxury.Admin.Controllers
             var discount = PreviewVoucherDiscount(request.VoucherCode, request.TongTienGoc, out var message);
             return Ok(new { soTienGiam = discount, message });
         }
+        private int LayMaNvTuToken()
+        {
+            var userIdClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier);
+            if (userIdClaim == null) return 0;
+            return int.Parse(userIdClaim.Value);
+        }
         [HttpPost("check-out")]
         public IActionResult CheckOut([FromBody] CheckOutRequest request)
         {
             if (request.MaDatPhong <= 0) return BadRequest("MaDatPhong không hợp lệ");
+
+            int maNvHienTai = LayMaNvTuToken();
 
             var datPhong = _context.Datphongs
                 .Include(x => x.Chitietdatphongs).ThenInclude(ct => ct.MaPhongNavigation)
@@ -439,7 +451,7 @@ namespace Luxury.Admin.Controllers
                 .FirstOrDefault(x => x.MaDatPhong == request.MaDatPhong);
 
             if (datPhong == null) return NotFound("Không tìm thấy đặt phòng");
-
+            datPhong.MaNv = maNvHienTai != 0 ? maNvHienTai : datPhong.MaNv;
             var chiTiet = ResolveCheckOutDetail(datPhong, request);
             if (chiTiet == null) return BadRequest("Không tìm thấy chi tiết đặt phòng phù hợp");
             if (chiTiet.MaPhongNavigation == null) return BadRequest("Chi tiết đặt phòng chưa được gán phòng");
@@ -474,7 +486,7 @@ namespace Luxury.Admin.Controllers
             var soDem = Math.Max(1, (ngayTraTinhTien.Date - ngayNhan.Date).Days);
 
             var tienPhong = giaDat * soDem;
-			var phuThuGio = thoiGianTra.TimeOfDay > new TimeSpan(12, 0, 0) ? Math.Round(giaDat * 0.3m) : 0;
+            var phuThuGio = thoiGianTra.TimeOfDay > new TimeSpan(12, 0, 0) ? Math.Round(giaDat * 0.3m) : 0;
             var tienDichVu = chiTiet.SudungDichvus.Sum(sd => sd.ThanhTien ?? ((sd.MaDichVuNavigation?.Gia ?? 0) * (sd.SoLuong ?? 0)));
             var phuThu = (request.ExtraFee ?? 0) + phuThuGio;
 
@@ -501,7 +513,7 @@ namespace Luxury.Admin.Controllers
             var tongTienPhaiTra = tongTienGoc - soTienGiam - tienDaDongApDung;
 
             // --- TÍNH TIỀN THỪA SHOW RA GIAO DIỆN (KHÔNG LƯU DB) ---
-            decimal soTienHoan = 0; 
+            decimal soTienHoan = 0;
 
             // Nếu tiền phải trả bị ÂM (tức là cọc nhiều hơn tổng tiền)
             if (tongTienPhaiTra < 0)
@@ -521,9 +533,9 @@ namespace Luxury.Admin.Controllers
 
             hoaDon.TongTienGoc = tongTienGoc;
             hoaDon.SoTienGiam = soTienGiam;
-            
+
             // LƯU Ý: Lưu tổng giá trị thực tế của tờ hóa đơn (Chưa trừ cọc) để in ra không bị sai lệch 0đ
-            hoaDon.TongTienPhaiTra = tongTienGoc - soTienGiam; 
+            hoaDon.TongTienPhaiTra = tongTienGoc - soTienGiam;
 
             datPhong.TrangThai = datPhong.Chitietdatphongs.Any(ct => ct.TrangThai == true && ct.MaCtdp != chiTiet.MaCtdp)
                 ? TrangThaiDangO : TrangThaiTraPhong;
@@ -578,6 +590,7 @@ namespace Luxury.Admin.Controllers
             {
                 message = "Check-out thành công",
                 maDatPhong = datPhong.MaDatPhong,
+                maNvXacNhan = maNvHienTai,
                 maHd = hoaDon.MaHd,
                 tongTienGoc,
                 soTienGiam,
