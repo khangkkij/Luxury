@@ -1,5 +1,6 @@
 ﻿using Luxury.Models;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
@@ -13,7 +14,13 @@ namespace Luxury.Controllers
     public class KhachHangController : ControllerBase
     {
         private readonly LuxuryHotelContext _context;
-        public KhachHangController(LuxuryHotelContext context) { _context = context; }
+        private readonly IWebHostEnvironment _env;
+
+        public KhachHangController(LuxuryHotelContext context, IWebHostEnvironment env)
+        {
+            _context = context;
+            _env = env;
+        }
 
         public class UpdateProfileDto
         {
@@ -69,9 +76,8 @@ namespace Luxury.Controllers
 
             if (file == null || file.Length == 0) return BadRequest("Vui lòng chọn ảnh.");
 
-            // Đường dẫn vật lý trỏ thẳng vào thư mục USER trong source code Frontend của bạn
-            var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "src", "DuanKhachSan", "KhachHang", "IMG", "USER");
-
+            // Dùng ContentRootPath giống Program.cs (UseStaticFiles RequestPath = "/USER_IMG") để ảnh lưu đúng chỗ và hiển thị được
+            var folderPath = Path.Combine(_env.ContentRootPath, "src", "DuanKhachSan", "KhachHang", "IMG", "USER");
             if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
 
             var extension = Path.GetExtension(file.FileName).ToLower();

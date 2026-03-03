@@ -65,11 +65,6 @@ namespace Luxury.KhachHang.Controllers
             {
                 _context.Refeshtokens.RemoveRange(allExistingTokens);
             }
-            var userOldTokens = _context.Refeshtokens.Where(rt => rt.UserId == userId);
-            if (userOldTokens.Any())
-            {
-                _context.Refeshtokens.RemoveRange(userOldTokens);
-            }
             var rfToken = new Refeshtoken
             {
                 UserId = userId,
