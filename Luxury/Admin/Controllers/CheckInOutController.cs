@@ -1,15 +1,18 @@
 using Luxury.Admin.ViewModel;
 using Luxury.Helpers;
 using Luxury.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Luxury.Admin.Controllers
 {
+    [Authorize]
     [Route("api/admin/[controller]")]
     [Route("api/nhanvien/[controller]")]
     [ApiController]
@@ -35,6 +38,7 @@ namespace Luxury.Admin.Controllers
             _configuration = configuration;
             _scopeFactory = scopeFactory; // Gán biến
         }
+
 
         // 1. Thay thế hàm GetBookingsReadyForCheckIn cũ bằng hàm này
         [HttpGet("bookings-ready")]
@@ -427,10 +431,18 @@ namespace Luxury.Admin.Controllers
             var discount = PreviewVoucherDiscount(request.VoucherCode, request.TongTienGoc, out var message);
             return Ok(new { soTienGiam = discount, message });
         }
+        private int LayMaNvTuToken()
+        {
+            var userIdClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier);
+            if (userIdClaim == null) return 0;
+            return int.Parse(userIdClaim.Value);
+        }
         [HttpPost("check-out")]
         public IActionResult CheckOut([FromBody] CheckOutRequest request)
         {
             if (request.MaDatPhong <= 0) return BadRequest("MaDatPhong không hợp lệ");
+
+            int maNvHienTai = LayMaNvTuToken();
 
             var datPhong = _context.Datphongs
                 .Include(x => x.Chitietdatphongs).ThenInclude(ct => ct.MaPhongNavigation)
@@ -439,7 +451,7 @@ namespace Luxury.Admin.Controllers
                 .FirstOrDefault(x => x.MaDatPhong == request.MaDatPhong);
 
             if (datPhong == null) return NotFound("Không tìm thấy đặt phòng");
-
+            datPhong.MaNv = maNvHienTai != 0 ? maNvHienTai : datPhong.MaNv;
             var chiTiet = ResolveCheckOutDetail(datPhong, request);
             if (chiTiet == null) return BadRequest("Không tìm thấy chi tiết đặt phòng phù hợp");
             if (chiTiet.MaPhongNavigation == null) return BadRequest("Chi tiết đặt phòng chưa được gán phòng");
@@ -500,20 +512,16 @@ namespace Luxury.Admin.Controllers
             // Tổng hóa đơn (gồm phòng + DV + phụ thu) - (Giảm giá + Toàn bộ tiền đã đóng)
             var tongTienPhaiTra = tongTienGoc - soTienGiam - tienDaDongApDung;
 
-            // 4. PHÉP TÍNH QUAN TRỌNG NHẤT:
-            // Lấy Tổng Hóa Đơn - (Giảm giá + Phần tiền cọc được phép trừ)
-            
+            // --- TÍNH TIỀN THỪA SHOW RA GIAO DIỆN (KHÔNG LƯU DB) ---
+            decimal soTienHoan = 0;
 
-            // 5. Nếu kết quả ÂM (tức là khách đưa thừa tiền), thì chốt là 0 đồng (Không hoàn tiền)
-            // Còn nếu DƯƠNG (tức là còn thiếu 70% tiền phòng hoặc thiếu tiền dịch vụ) thì giữ nguyên để thu.
+            // Nếu tiền phải trả bị ÂM (tức là cọc nhiều hơn tổng tiền)
             if (tongTienPhaiTra < 0)
             {
-                tongTienPhaiTra = 0;
+                soTienHoan = Math.Abs(tongTienPhaiTra); // Bắt lấy số tiền thừa để gửi lên Frontend
+                tongTienPhaiTra = 0;                    // Đưa số cần thu thêm về 0 để không tạo giao dịch thu
             }
-
-            var soTienHoan = 0; // Luôn bằng 0
-            var tongHoan = 0;
-            // --- KẾT THÚC ĐOẠN SỬA ---
+            // --------------------------------------------------------
 
             var hoaDon = datPhong.Hoadons.FirstOrDefault();
             if (hoaDon == null)
@@ -525,17 +533,20 @@ namespace Luxury.Admin.Controllers
 
             hoaDon.TongTienGoc = tongTienGoc;
             hoaDon.SoTienGiam = soTienGiam;
-            hoaDon.TongTienPhaiTra = tongTienPhaiTra;
+
+            // LƯU Ý: Lưu tổng giá trị thực tế của tờ hóa đơn (Chưa trừ cọc) để in ra không bị sai lệch 0đ
+            hoaDon.TongTienPhaiTra = tongTienGoc - soTienGiam;
 
             datPhong.TrangThai = datPhong.Chitietdatphongs.Any(ct => ct.TrangThai == true && ct.MaCtdp != chiTiet.MaCtdp)
                 ? TrangThaiDangO : TrangThaiTraPhong;
             datPhong.MaNv = request.MaNv ?? datPhong.MaNv;
 
             chiTiet.TrangThai = false;
-            chiTiet.NgayTra = thoiGianTra;
+            // Đã comment dòng dưới để hóa đơn in đúng số đêm
+            // chiTiet.NgayTra = thoiGianTra; 
             chiTiet.MaPhongNavigation.TrangThai = 3;
 
-            // 4. Tạo thanh toán nếu còn thiếu
+            // 4. Tạo thanh toán CHỈ KHI khách còn thiếu tiền
             if (tongTienPhaiTra > 0 && !IsOnlineMethod(request.HinhThucThanhToan))
             {
                 var thanhToan = new Thanhtoan
@@ -543,13 +554,12 @@ namespace Luxury.Admin.Controllers
                     MaDatPhong = datPhong.MaDatPhong,
                     MaHd = hoaDon.MaHd,
                     LoaiThanhToan = LoaiThanhToan,
-                    SoTien = tongTienPhaiTra,
+                    SoTien = tongTienPhaiTra, // Đây là số tiền thu thêm
                     HinhThucThanhToan = request.HinhThucThanhToan ?? "cash",
                     TrangThai = TrangThaiDaThanhToan
                 };
                 _context.Thanhtoans.Add(thanhToan);
             }
-            // Đã xóa phần tạo thanh toán hoàn tiền
 
             _context.SaveChanges();
             // =============== THÊM MỚI ĐOẠN NÀY ===============
@@ -580,13 +590,14 @@ namespace Luxury.Admin.Controllers
             {
                 message = "Check-out thành công",
                 maDatPhong = datPhong.MaDatPhong,
+                maNvXacNhan = maNvHienTai,
                 maHd = hoaDon.MaHd,
                 tongTienGoc,
                 soTienGiam,
                 tienCoc = daThanhToan,
                 tienCocApDung = tienDaDongApDung,
-                tongTienPhaiTra,
-                soTienHoan = 0,
+                tongTienPhaiTra = tongTienPhaiTra, // Trả về số Lễ tân cần thu thêm
+                soTienHoan = soTienHoan,           // Trả về số Tiền thừa thối lại
                 voucherMessage
             });
         }

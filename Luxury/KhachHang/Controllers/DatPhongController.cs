@@ -138,7 +138,7 @@ namespace KhachSanLuxury.KhachHang.Controllers
                 foreach (var phong in danhSachPhongTrong)
                 {
                     // 2. Cập nhật trạng thái phòng thành 0 (Đã được đặt) để trừ số lượng phòng trống
-                    phong.TrangThai = 0;
+                    phong.TrangThai = 1;
 
                     var ganSoNguoi = !daGanSoNguoi;
                     var chiTiet = new Chitietdatphong
