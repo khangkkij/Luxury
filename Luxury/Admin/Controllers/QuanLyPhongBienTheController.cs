@@ -630,7 +630,8 @@ namespace Luxury.Admin.Controllers
                             MoTa = dtoLe.MoTa,
                             NgayBatDau = dtoLe.NgayBatDau,
                             NgayKetThuc = dtoLe.NgayKetThuc,
-                            Gia = dtoLe.Gia
+                            Gia = dtoLe.Gia,
+                            MacDinh=false
                         });
                     }
                 }
