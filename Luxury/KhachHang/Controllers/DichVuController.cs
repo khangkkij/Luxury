@@ -4,7 +4,8 @@ using Luxury.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-
+using Microsoft.AspNetCore.SignalR;
+using Luxury.Services;
 namespace Luxury.KhachHang.Controllers
 {
     [Route("api/[controller]")]
@@ -13,10 +14,14 @@ namespace Luxury.KhachHang.Controllers
     {
         private readonly LuxuryHotelContext _context;
         private readonly IWebHostEnvironment _environment;
-        public DichVuController(LuxuryHotelContext context, IWebHostEnvironment environment)
+        private readonly IHubContext<hotelHub> _hubContext;
+
+
+        public DichVuController(LuxuryHotelContext context, IWebHostEnvironment environment, IHubContext<hotelHub> hubContext)
         {
             _context = context;
             _environment = environment;
+            _hubContext = hubContext;
         }
         private async Task<string> upLoadImage(IFormFile imageFile)
         {
@@ -90,6 +95,7 @@ namespace Luxury.KhachHang.Controllers
                 }
                 _context.Dichvus.Add(service);
                 await _context.SaveChangesAsync();
+                await _hubContext.Clients.All.SendAsync("reload_Service");
             }
             catch (Exception ex)
             {
@@ -115,7 +121,7 @@ namespace Luxury.KhachHang.Controllers
                 dichVu.TrangThai = update.TrangThai ?? dichVu.TrangThai;
 
                 await _context.SaveChangesAsync();
-
+                await _hubContext.Clients.All.SendAsync("reload_Service");
                 var result = new dichVuResponseDTO
                 {
                     MaDichVu = dichVu.MaDichVu,
@@ -145,6 +151,7 @@ namespace Luxury.KhachHang.Controllers
                 }
                 _context.Dichvus.Remove(dichVu);
                 await _context.SaveChangesAsync();
+                await _hubContext.Clients.All.SendAsync("reload_Service");
                 return Ok();
             }
             catch (Exception ex)
@@ -205,6 +212,7 @@ namespace Luxury.KhachHang.Controllers
                 }
 
                 await _context.SaveChangesAsync();
+                await _hubContext.Clients.All.SendAsync("reload_Service");
                 return Ok(new { Message = "Đặt dịch vụ thành công" });
 
             }
@@ -294,6 +302,7 @@ namespace Luxury.KhachHang.Controllers
                     }
 
                     await _context.SaveChangesAsync();
+                    await _hubContext.Clients.All.SendAsync("reload_Service");
 
                     return Ok(new
                     {
@@ -316,6 +325,7 @@ namespace Luxury.KhachHang.Controllers
                         {
                             _context.SudungDichvus.Remove(sdDichVu);
                             await _context.SaveChangesAsync();
+                            await _hubContext.Clients.All.SendAsync("reload_Service");
 
                             return Ok(new
                             {
@@ -339,7 +349,7 @@ namespace Luxury.KhachHang.Controllers
                     }
 
                     await _context.SaveChangesAsync();
-
+                    await _hubContext.Clients.All.SendAsync("reload_Service");
                     return Ok(new
                     {
                         Message = "Cập nhật dịch vụ thành công",
@@ -376,6 +386,7 @@ namespace Luxury.KhachHang.Controllers
             }
             _context.SudungDichvus.Remove(sdDichVu);
             await _context.SaveChangesAsync();
+            await _hubContext.Clients.All.SendAsync("reload_Service");
             return Ok(new
             {
                 Message = "Xoá dịch vụ đã đặt thành công"
