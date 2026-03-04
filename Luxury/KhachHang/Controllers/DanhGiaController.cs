@@ -89,25 +89,38 @@ namespace Luxury.KhachHang.Controllers
             int maKH = LayIdTuToken();
             if (maKH == 0) return Unauthorized();
 
-            // KIỂM TRA BẢO MẬT: Đảm bảo đơn hàng này đúng là của ông khách đang đăng nhập
-            // Và đơn này PHẢI đã thanh toán thì mới cho phép INSERT vào bảng đánh giá
+            // 1. Tự động tìm MaPhong từ bảng Chi tiết đặt phòng
+            // Dựa vào MaDatPhong người dùng gửi lên, ta lấy mã phòng đầu tiên trong đơn đó
+            var chiTiet = await _context.Chitietdatphongs
+                .FirstOrDefaultAsync(ct => ct.MaDatPhong == model.MaDatPhong);
+
+            if (chiTiet == null)
+            {
+                return BadRequest("Không tìm thấy thông tin phòng hợp lệ cho mã đặt phòng này.");
+            }
+
+            // 2. Kiểm tra quyền sở hữu và trạng thái đơn đặt phòng
             var checkHopLe = await _context.Thanhtoans
-        .AnyAsync(tt => tt.MaDatPhong == model.MaDatPhong &&
-                        tt.MaDatPhongNavigation.MaKh == maKH &&
-                        tt.LoaiThanhToan == "ThanhToan" && // Phải là loại thanh toán quyết toán
-                        tt.TrangThai.StartsWith("DaThanhToan") && // Đã thanh toán xong
-                        tt.MaDatPhongNavigation.TrangThai == "TraPhong"); // Đã trả phòng
+                .AnyAsync(tt => tt.MaDatPhong == model.MaDatPhong &&
+                                tt.MaDatPhongNavigation.MaKh == maKH &&
+                                tt.LoaiThanhToan == "ThanhToan" &&
+                                tt.TrangThai.StartsWith("DaThanhToan") &&
+                                tt.MaDatPhongNavigation.TrangThai == "TraPhong");
 
             if (!checkHopLe)
             {
-                return BadRequest("Bạn không có quyền đánh giá đơn này hoặc đơn hàng chưa hoàn tất thanh toán.");
+                return BadRequest("Bạn không có quyền đánh giá đơn này hoặc đơn hàng chưa hoàn tất.");
             }
+
+            // 3. GÁN TỰ ĐỘNG MAPHONG VÀO MODEL ĐÁNH GIÁ
+            model.MaPhong = chiTiet.MaPhong;
+
+            // 4. Xử lý lưu ảnh (giữ nguyên logic của bạn)
             if (fileAnh != null && fileAnh.Length > 0)
             {
                 string fileName = Guid.NewGuid().ToString() + Path.GetExtension(fileAnh.FileName);
                 string path = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/uploads/reviews", fileName);
 
-                // Tạo thư mục nếu chưa có
                 var directory = Path.GetDirectoryName(path);
                 if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
 
@@ -115,23 +128,22 @@ namespace Luxury.KhachHang.Controllers
                 {
                     await fileAnh.CopyToAsync(stream);
                 }
-                model.HinhAnh = fileName; // Lưu tên file vào cột HinhAnh trong DB
+                model.HinhAnh = fileName;
             }
 
-            // Gán các giá trị tự động mà người dùng không cần nhập
-            model.NgayDanhGia = DateTime.Now; // Lưu ngày giờ hiện tại
-            model.TrangThai = 1;              // 1: Cho phép hiển thị lên web (0: là ẩn)
+            // 5. Gán các thông số hệ thống
+            model.NgayDanhGia = DateTime.Now;
+            model.TrangThai = 1;
 
             try
             {
-                _context.Danhgia.Add(model);      // Thêm đối tượng đánh giá vào hàng chờ
-                await _context.SaveChangesAsync(); // Chốt lệnh lưu xuống SQL Server
+                _context.Danhgia.Add(model);
+                await _context.SaveChangesAsync();
                 return Ok(new { success = true, message = "Cảm ơn bạn đã gửi đánh giá!" });
             }
             catch (Exception ex)
             {
-                // Trả về lỗi nếu database có vấn đề (vd: sai kiểu dữ liệu, thiếu cột...)
-                return StatusCode(500, "Lỗi hệ thống: " + ex.Message);
+                return StatusCode(500, "Lỗi hệ thống khi lưu: " + ex.Message);
             }
         }
         [HttpDelete("xoa-danh-gia/{id}")]
@@ -192,10 +204,12 @@ namespace Luxury.KhachHang.Controllers
                         SoSao = dg.SoSao ?? 0,
                         NoiDung = dg.NoiDung,
                         NgayDanhGia = dg.NgayDanhGia ?? DateTime.Now,
-                        PhanHoi = dg.PhanHoi,
+						HinhAnh = dg.HinhAnh,
+						PhanHoi = dg.PhanHoi,
+                        NgayPhanHoi = dg.NgayPhanHoi.HasValue ? dg.NgayPhanHoi.Value.ToString("yyyy-MM-dd HH:mm") : null,
 
-                        // Xử lý lấy tên khách hàng an toàn (null check)
-                        TenKhachHang = dg.MaDatPhongNavigation != null && dg.MaDatPhongNavigation.MaKhNavigation != null
+						// Xử lý lấy tên khách hàng an toàn (null check)
+						TenKhachHang = dg.MaDatPhongNavigation != null && dg.MaDatPhongNavigation.MaKhNavigation != null
                                        ? dg.MaDatPhongNavigation.MaKhNavigation.HoVaTen
                                        : "Khách hàng ẩn danh",
 

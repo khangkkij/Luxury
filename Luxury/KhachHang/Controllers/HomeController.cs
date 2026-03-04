@@ -14,11 +14,28 @@ namespace Luxury.KhachHang.Controllers
         {
             _context = context;
 		}
-        [HttpGet]
-        public IActionResult GetAll ()
-        {
-            var sanpham = _context.Phongs.ToList();
-			return Ok(sanpham);
+		[HttpGet]
+		public async Task<IActionResult> GetAll()
+		{
+			var data = await _context.LoaiphongBienthes
+				.Include(bt => bt.MaLpNavigation)
+				.Include(bt => bt.Hinhanhs)
+				.Include(bt => bt.Thietlapgia)
+				.Include(bt => bt.Phongs) // Bắt buộc Include bảng Phongs để lấy số tầng
+				.Select(bt => new
+				{
+					MaBienThePhong = bt.MaBienThePhong,
+					TenBienThe = bt.TenBienThe,
+					TenLoai = bt.MaLpNavigation != null ? bt.MaLpNavigation.TenLoai : "N/A",
+					SoNguoiToiDa = (bt.SoNguoiLon ?? 0) + (bt.SoTreEm ?? 0),
+					DienTich = bt.DienTich,
+					AnhDaiDien = bt.Hinhanhs.FirstOrDefault() != null ? bt.Hinhanhs.FirstOrDefault().DuongDan : "",
+					GiaGoc = bt.Thietlapgia.Where(g => g.MacDinh == true).Select(g => g.Gia).FirstOrDefault(),
+				})
+				.Take(3)
+				.ToListAsync();
+
+			return Ok(data);
 		}
 		[Route("/api/BestDeals")]
 		[HttpGet]
@@ -68,7 +85,6 @@ namespace Luxury.KhachHang.Controllers
 				decimal giaGoc = item.GiaHienTai ?? 0;
 				decimal giaBan = giaGoc;
 
-				// Nếu có giảm giá FlashSale
 				if (item.FlashSaleActive > 0)
 				{
 					giaBan = giaGoc * (1 - (decimal)item.FlashSaleActive / 100);
@@ -76,21 +92,16 @@ namespace Luxury.KhachHang.Controllers
 
 				return new BestDealViewModel
 				{
-					MaLp = item.BienThe.MaBienThePhong, // Frontend dùng ID này để booking
-														// Tên hiển thị: Ưu tiên tên biến thể, nếu null lấy tên loại
+					MaLp = item.BienThe.MaBienThePhong,
 					TenLoai = !string.IsNullOrEmpty(item.BienThe.TenBienThe)
 							  ? item.BienThe.TenBienThe
 							  : item.BienThe.MaLpNavigation.TenLoai,
-
-					DienTich = item.BienThe.DienTich,
-					HuongNhin = item.BienThe.HuongNhin,
-					LoaiGiuong = item.BienThe.LoaiGiuong,
-
-					Gia = giaBan,       // Giá sau khi giảm (nếu có)
-					GiaGoc = giaGoc,    // Giá gốc để so sánh
-
+					Gia = giaBan,
+					GiaGoc = giaGoc,
+					// BẮT BUỘC THÊM DÒNG NÀY ĐỂ GỬI PHẦN TRĂM VỀ FRONTEND
+					PhanTramGiam = item.FlashSaleActive.ToString(),
 					HinhAnh = item.AnhDaiDien,
-					MoTa = item.BienThe.MaLpNavigation.MoTa // Lấy mô tả từ bảng cha LOAIPHONG
+					MoTa = item.BienThe.MaLpNavigation.MoTa
 				};
 			})
 			// Sắp xếp: Ưu tiên phòng có giảm giá lên đầu, sau đó đến giá thấp nhất
