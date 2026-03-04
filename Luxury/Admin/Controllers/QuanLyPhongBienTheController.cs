@@ -602,6 +602,38 @@ namespace Luxury.Admin.Controllers
                     if (isOverlap)
                         return BadRequest("Khoảng ngày lễ bị trùng với một giá lễ đã tồn tại");
                 }
+                // =========================
+                // 4️⃣ Add / Update giá lễ
+                // =========================
+
+                foreach (var dtoLe in dto.PriceRanges)
+                {
+                    var existing = existingLeInDb
+                        .FirstOrDefault(x => x.MaThietLap == dtoLe.MaThietLapGia);
+
+                    if (existing != null)
+                    {
+                        // UPDATE
+                        existing.LoaiGia = dtoLe.LoaiGia;
+                        existing.MoTa = dtoLe.MoTa;
+                        existing.NgayBatDau = dtoLe.NgayBatDau;
+                        existing.NgayKetThuc = dtoLe.NgayKetThuc;
+                        existing.Gia = dtoLe.Gia;
+                    }
+                    else
+                    {
+                        // ADD MỚI
+                        _context.Thietlapgia.Add(new Thietlapgium
+                        {
+                            MaBienThePhong = id,
+                            LoaiGia = dtoLe.LoaiGia,
+                            MoTa = dtoLe.MoTa,
+                            NgayBatDau = dtoLe.NgayBatDau,
+                            NgayKetThuc = dtoLe.NgayKetThuc,
+                            Gia = dtoLe.Gia
+                        });
+                    }
+                }
                 // 3. Update tiện ích
                 var oldTienIch = _context.TienichLoaiphongs
                     .Where(t => t.MaBienThePhong == id);
