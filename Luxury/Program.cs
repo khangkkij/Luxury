@@ -36,7 +36,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowVueApp", policy =>
     {
-        policy.WithOrigins("http://localhost:5173") // Cổng mặc định của Vite/Vue
+        policy.WithOrigins("http://localhost:5174") // Cổng mặc định của Vite/Vue
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials(); // Bắt buộc để gửi AuthToken qua Cookie
